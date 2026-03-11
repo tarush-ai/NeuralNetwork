@@ -1,6 +1,6 @@
 /*
 * Author: Tarush Gupta
-* Date: February 27, 2026
+* Date: March 13, 2026
 * Description: Main driver class for the ABC Neural Net.
 *              Execution flow driven entirely by setConfig().
 *              Timing is measured outside train/run and stored for reporting.
@@ -46,14 +46,7 @@ public class Main
       if (network.shouldRun)
       {
          long runStart = System.currentTimeMillis();
-         if (network.isTraining)
-         {
-            network.runTrainingCases();
-         }
-         else
-         {
-            network.runTestCases();
-         }
+         network.runTestCases();
          network.runTimeMs = System.currentTimeMillis() - runStart;
          network.reportRunResults();
       } // if (network.shouldRun)

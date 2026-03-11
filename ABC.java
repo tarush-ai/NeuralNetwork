@@ -1,6 +1,6 @@
 /*
 * Author: Tarush Gupta
-* Date: February 27, 2026
+* Date: March 13, 2026
 * Description: A-B-C Neural Network with gradient descent training.
 *              Generalizes AB1 to support multiple output activations F[i].
 *              Supports configurable layers, rand/fixed init, training/running modes,
@@ -74,7 +74,7 @@ public class ABC
    public void setConfig()
    {
       inputLayer = 2;
-      hiddenLayer = 1;
+      hiddenLayer = 5;
       outputLayer = 3;
       numCases = 4;
       low = -1.5;
@@ -468,14 +468,16 @@ targets[7][0] = 0.0;
    }
 
 /*
-* Runs the network once using current input activations.
-* Forward pass: theta_j -> h_j -> theta_i -> F_i
+* Sets input activations from the given training case and runs the
+* network forward. Forward pass: theta_j -> h_j -> theta_i -> F_i
 */
-   public void run()
+   public void runTrainCase(int caseIndex)
    {
       int i;
       int j;
       int k;
+
+      populateInput(caseIndex);
 
 /*
 * Hidden layer: theta_j = sum_K a_K * w_kj, h_j = f(theta_j)
@@ -502,7 +504,46 @@ targets[7][0] = 0.0;
          }
          F[i] = activation(thetaI[i]);
       }
-   } // run()
+   } // runTrainCase(int caseIndex)
+
+/*
+* Sets input activations from the given test case and runs the
+* network forward. Forward pass: theta_j -> h_j -> theta_i -> F_i
+*/
+   public void runTestCase(int caseIndex)
+   {
+      int i;
+      int j;
+      int k;
+
+      populateInput(caseIndex);
+
+/*
+* Hidden layer: theta_j = sum_K a_K * w_kj, h_j = f(theta_j)
+*/
+      for (j = 0; j < hiddenLayer; ++j)
+      {
+         thetaJ[j] = 0.0;
+         for (k = 0; k < inputLayer; ++k)
+         {
+            thetaJ[j] += a[k] * wKJ[k][j];
+         }
+         h[j] = activation(thetaJ[j]);
+      }
+
+/*
+* Output layer: theta_i = sum_J h_J * w_ji, F_i = f(theta_i)
+*/
+      for (i = 0; i < outputLayer; ++i)
+      {
+         thetaI[i] = 0.0;
+         for (j = 0; j < hiddenLayer; ++j)
+         {
+            thetaI[i] += h[j] * wJI[j][i];
+         }
+         F[i] = activation(thetaI[i]);
+      }
+   } // runTestCase(int caseIndex)
 
 /*
 * Trains the network using steepest descent across all training cases.
@@ -526,8 +567,7 @@ targets[7][0] = 0.0;
 
          for (caseIndex = 0; caseIndex < numCases; ++caseIndex)
          {
-            populateInput(caseIndex);
-            run();
+            runTrainCase(caseIndex);
 
 /*
 * omega_i = T_i - F_i, psi_i = omega_i * f'(theta_i)
@@ -620,8 +660,7 @@ targets[7][0] = 0.0;
 
       for (caseIndex = 0; caseIndex < numCases; ++caseIndex)
       {
-         populateInput(caseIndex);
-         run();
+         runTrainCase(caseIndex);
          for (i = 0; i < outputLayer; ++i)
          {
             results[caseIndex][i] = F[i];
@@ -640,8 +679,7 @@ targets[7][0] = 0.0;
 
       for (caseIndex = 0; caseIndex < numCases; ++caseIndex)
       {
-         populateInput(caseIndex);
-         run();
+         runTestCase(caseIndex);
          for (i = 0; i < outputLayer; ++i)
          {
             results[caseIndex][i] = F[i];
