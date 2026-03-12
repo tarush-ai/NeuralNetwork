@@ -1,6 +1,6 @@
 /*
 * Author: Tarush Gupta
-* Date: March 13, 2026
+* Date: March 12, 2026
 * Description: A-B-C Neural Network with gradient descent training.
 *              Generalizes AB1 to support multiple output activations F[i].
 *              Supports configurable layers, rand/fixed init, training/running modes,
@@ -73,11 +73,11 @@ public class ABC
 */
    public void setConfig()
    {
-      inputLayer = 2;
-      hiddenLayer = 5;
+      inputLayer = 5;
+      hiddenLayer = 1;
       outputLayer = 3;
       numCases = 4;
-      low = -1.5;
+      low = 0.1;
       high = 1.5;
       maxIterations = 100000;
       lambda = 0.3;
@@ -125,14 +125,14 @@ public class ABC
       F = new double[outputLayer];
       wKJ = new double[inputLayer][hiddenLayer];
       wJI = new double[hiddenLayer][outputLayer];
-      thetaJ = new double[hiddenLayer];
-      thetaI = new double[outputLayer];
 
       inputs = new double[numCases][inputLayer];
       results = new double[numCases][outputLayer];
 
       if (isTraining)
       {
+         thetaI = new double[outputLayer];
+         thetaJ = new double[hiddenLayer];
          targets = new double[numCases][outputLayer];
          deltaWKJ = new double[inputLayer][hiddenLayer];
          deltaWJI = new double[hiddenLayer][outputLayer];
@@ -270,11 +270,11 @@ inputs[7][0] = 1.0; inputs[7][1] = 1.0; inputs[7][2] = 1.0;
    } // useFixedWeights()
 
 /*
-* Sets the truth table.
+* Sets the expected target output values for all test cases based on the
+* desired logic functions (e.g., AND, OR, XOR) for C output activations.
 */
    public void setTruthTable()
    {
-
       targets[0][0] = 0.0; targets[0][1] = 0.0; targets[0][2] = 0.0;
       targets[1][0] = 0.0; targets[1][1] = 1.0; targets[1][2] = 1.0;
       targets[2][0] = 0.0; targets[2][1] = 1.0; targets[2][2] = 1.0;
@@ -369,11 +369,11 @@ targets[7][0] = 0.0;
       {
          System.out.println("Error loading weights: " + e.getMessage());
       }
-   } // useLoadedWeights(String filename)
+   } // useLoadedWeights()
 
-/**
- * Saves the weights to the relevant file.
- */
+/*
+* Saves the weights to the relevant file.
+*/
    public void saveWeights()
    {
       try
@@ -471,13 +471,11 @@ targets[7][0] = 0.0;
 * Sets input activations from the given training case and runs the
 * network forward. Forward pass: theta_j -> h_j -> theta_i -> F_i
 */
-   public void runTrainCase(int caseIndex)
+   public void runTrainCase()
    {
       int i;
       int j;
       int k;
-
-      populateInput(caseIndex);
 
 /*
 * Hidden layer: theta_j = sum_K a_K * w_kj, h_j = f(theta_j)
@@ -504,31 +502,30 @@ targets[7][0] = 0.0;
          }
          F[i] = activation(thetaI[i]);
       }
-   } // runTrainCase(int caseIndex)
+   } // runTrainCase()
 
 /*
 * Sets input activations from the given test case and runs the
 * network forward. Forward pass: theta_j -> h_j -> theta_i -> F_i
 */
-   public void runTestCase(int caseIndex)
+   public void runTestCase()
    {
       int i;
       int j;
       int k;
-
-      populateInput(caseIndex);
 
 /*
 * Hidden layer: theta_j = sum_K a_K * w_kj, h_j = f(theta_j)
 */
       for (j = 0; j < hiddenLayer; ++j)
       {
-         thetaJ[j] = 0.0;
+         double thetaJ = 0.0;
          for (k = 0; k < inputLayer; ++k)
          {
-            thetaJ[j] += a[k] * wKJ[k][j];
+            thetaJ += a[k] * wKJ[k][j];
          }
-         h[j] = activation(thetaJ[j]);
+
+         h[j] = activation(thetaJ);
       }
 
 /*
@@ -536,14 +533,15 @@ targets[7][0] = 0.0;
 */
       for (i = 0; i < outputLayer; ++i)
       {
-         thetaI[i] = 0.0;
+         double thetaI = 0.0;
          for (j = 0; j < hiddenLayer; ++j)
          {
-            thetaI[i] += h[j] * wJI[j][i];
+            thetaI += h[j] * wJI[j][i];
          }
-         F[i] = activation(thetaI[i]);
+
+         F[i] = activation(thetaI);
       }
-   } // runTestCase(int caseIndex)
+   } // runTestCase()
 
 /*
 * Trains the network using steepest descent across all training cases.
@@ -567,7 +565,8 @@ targets[7][0] = 0.0;
 
          for (caseIndex = 0; caseIndex < numCases; ++caseIndex)
          {
-            runTrainCase(caseIndex);
+            populateInput(caseIndex);
+            runTrainCase();
 
 /*
 * omega_i = T_i - F_i, psi_i = omega_i * f'(theta_i)
@@ -653,25 +652,6 @@ targets[7][0] = 0.0;
 * Loops over all test cases, setting inputs and running the network.
 * Stores each output F[i] in results[caseIndex][i].
 */
-   public void runTrainingCases()
-   {
-      int caseIndex;
-      int i;
-
-      for (caseIndex = 0; caseIndex < numCases; ++caseIndex)
-      {
-         runTrainCase(caseIndex);
-         for (i = 0; i < outputLayer; ++i)
-         {
-            results[caseIndex][i] = F[i];
-         }
-      }
-   } // runTrainingCases()
-
-/*
-* Loops over all test cases, setting inputs and running the network.
-* Stores each output F[i] in results[caseIndex][i].
-*/
    public void runTestCases()
    {
       int caseIndex;
@@ -679,7 +659,9 @@ targets[7][0] = 0.0;
 
       for (caseIndex = 0; caseIndex < numCases; ++caseIndex)
       {
-         runTestCase(caseIndex);
+         populateInput(caseIndex);
+         runTestCase();
+         
          for (i = 0; i < outputLayer; ++i)
          {
             results[caseIndex][i] = F[i];
@@ -711,7 +693,7 @@ targets[7][0] = 0.0;
       if (showInputTable)
       {
          System.out.print("\nInputs");
-         System.out.print("\t".repeat(2));
+         System.out.print("\t\t");
       }
       if (showTruthTable && isTraining)
       {
