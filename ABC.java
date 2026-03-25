@@ -1,3 +1,6 @@
+// user feedback needs to be relevant: irrelevant (loaded the weights, same time "random weight range... x-y")
+// saving weights, name of save weight file that they aren't saving to- don't print irrelevant information back to the user
+
 /*
 * Author: Tarush Gupta
 * Date: March 12, 2026
@@ -51,7 +54,6 @@ public class ABC
    public double[][] deltaWKJ;
    public double[][] deltaWJI;
    public double[] psiI;
-   public double[] psiJ;
 
 /*
 * Training results
@@ -137,7 +139,6 @@ public class ABC
          deltaWKJ = new double[inputLayer][hiddenLayer];
          deltaWJI = new double[hiddenLayer][outputLayer];
          psiI = new double[outputLayer];
-         psiJ = new double[hiddenLayer];
       }
    } // allocateMemory()
 
@@ -355,7 +356,8 @@ targets[7][0] = 0.0;
                   wJI[j][i] = in.readDouble();
                }
             }
-         }
+         } // if (fileA == inputLayer && fileB == hiddenLayer && fileC == outputLayer)
+         
          else
          {
             System.out.println("Error: Weight file config (" + fileA + "-" + fileB + "-" + fileC
@@ -401,7 +403,7 @@ targets[7][0] = 0.0;
          }
 
          out.close();
-      }
+      } // try
       catch (Exception e)
       {
          e.printStackTrace();
@@ -586,11 +588,13 @@ targets[7][0] = 0.0;
             for (j = 0; j < hiddenLayer; ++j)
             {
                double omegaJ = 0.0;
+               double psiJ = 0.0;
+
                for (i = 0; i < outputLayer; ++i)
                {
                   omegaJ += psiI[i] * wJI[j][i];
                }
-               psiJ[j] = omegaJ * activationDerivative(thetaJ[j]);
+               psiJ = omegaJ * activationDerivative(thetaJ[j]);
 
                for (i = 0; i < outputLayer; ++i)
                {
@@ -600,7 +604,7 @@ targets[7][0] = 0.0;
 
                for (k = 0; k < inputLayer; ++k)
                {
-                  double dE_dWKJ = - a[k] * psiJ[j];
+                  double dE_dWKJ = - a[k] * psiJ;
                   deltaWKJ[k][j] = - lambda * dE_dWKJ;
                }
             } // for (j = 0; j < hiddenLayer; ++j)
@@ -614,6 +618,7 @@ targets[7][0] = 0.0;
                {
                   wJI[j][i] += deltaWJI[j][i];
                }
+
                for (k = 0; k < inputLayer; ++k)
                {
                   wKJ[k][j] += deltaWKJ[k][j];
@@ -635,14 +640,17 @@ targets[7][0] = 0.0;
    public void reportTrainingResults()
    {
       System.out.println("\nTraining Exit Information:");
+      
       if (trainIterations >= maxIterations)
       {
          System.out.println("Reason: Max iterations reached.");
       }
+
       if (trainError < errorThreshold)
       {
          System.out.println("Reason: Error threshold reached.");
       }
+
       System.out.println("Iterations reached: " + trainIterations);
       System.out.println("Average Error reached: " + trainError);
       System.out.println("Time to train: " + trainTimeMs + " ms");

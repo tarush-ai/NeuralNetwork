@@ -1,0 +1,47 @@
+{
+   "network":
+   {
+      "inputLayer": 2,
+      "hiddenLayer": 2,
+      "outputLayer": 1
+   },
+
+   "data":
+   {
+      "numCases": 4,
+      "inputFile": "inputs.bin",
+      "truthTableFile": "truth.bin"
+   },
+
+   "training":
+   {
+      "isTraining": true,
+      "useRandomWeights": true,
+      "_weightRange": "random init draws from [low, high]; ignored if useRandomWeights is false",
+      "low": 0.1,
+      "high": 1.5,
+      "lambda": 0.3,
+      "maxIterations": 100000,
+      "errorThreshold": 2e-4
+   },
+
+   "execution":
+   {
+      "shouldRun": true,
+      "activationFunction": "sigmoid",
+      "_activationOptions": "sigmoid | tanh | linear"
+   },
+
+   "display":
+   {
+      "showInputTable": true,
+      "showTruthTable": true
+   },
+
+   "files":
+   {
+      "_loadNote": "set loadFile to non-empty and useRandomWeights to false to run from saved weights",
+      "loadFile":  "",
+      "saveFile":  "save.bin"
+   }
+}
