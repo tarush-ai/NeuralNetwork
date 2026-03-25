@@ -1,6 +1,4 @@
-*.bin
 *.class
 .env
-AB1.java
-ABC.java
+data/weights/
 

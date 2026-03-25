@@ -6,10 +6,13 @@
 *              Supports configurable layers, rand/fixed init, training/running modes,
 *              and binary weight save/load.
 */
+import java.io.BufferedReader;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
+import java.io.FileReader;
+import java.util.function.DoubleUnaryOperator;
 
 public class ABCbp
 {
@@ -36,6 +39,7 @@ public class ABCbp
    public double[][] wKJ;
    public double[][] wJI;
    public double[][] inputs;
+   public double[] thetaJ;
 
 /*
 * Run results
@@ -46,8 +50,6 @@ public class ABCbp
 * Training-only arrays
 */
    public double[][] targets;
-   public double[][] deltaWKJ;
-   public double[][] deltaWJI;
    public double[] psiI;
 
 /*
@@ -58,6 +60,9 @@ public class ABCbp
    public long trainTimeMs;
    public long runTimeMs;
 
+/*
+* Config file and runtime configuration
+*/
    public boolean isTraining;
    public boolean shouldRun;
    public boolean showInputTable;
@@ -66,57 +71,133 @@ public class ABCbp
    public String saveFile;
    public String inputFile;
    public String truthTableFile;
+   public String configFile;
+   public String activationFunction;
+   public DoubleUnaryOperator activationFn;
+   public DoubleUnaryOperator activationDerivFn;
 
 /*
-* Sets config for the network.
-* To be replaced by config file + json parsing.
+* Reads all network parameters from the given JSON config file.
+* Sets activationFn and activationDerivFn via method reference based
+* on the activationFunction field — no conditional is evaluated in the loop.
 */
-   public void setConfig()
+   public void setConfig(String configFile) throws Exception
    {
-      inputLayer = 2;
-      hiddenLayer = 2;
-      outputLayer = 1;
-      numCases = 4;
-      low = 0.1;
-      high = 1.5;
-      maxIterations = 100000;
-      lambda = 0.3;
-      errorThreshold = 2e-4;
-      useRandomWeights = true;
-      isTraining = true;
-      shouldRun = true;
-      showInputTable = true;
-      showTruthTable = true;
-/*
-      loadFile = "load.bin";
-      saveFile = "save.bin";
-*/
-   } // setConfig()
+      this.configFile = configFile;
+
+      StringBuilder sb = new StringBuilder();
+      BufferedReader reader = new BufferedReader(new FileReader(configFile));
+      String line;
+      while ((line = reader.readLine()) != null)
+      {
+         sb.append(line);
+      }
+      reader.close();
+      String json = sb.toString();
+
+      inputLayer = Integer.parseInt(getJsonValue(json, "inputLayer"));
+      hiddenLayer = Integer.parseInt(getJsonValue(json, "hiddenLayer"));
+      outputLayer = Integer.parseInt(getJsonValue(json, "outputLayer"));
+      numCases = Integer.parseInt(getJsonValue(json, "numCases"));
+      inputFile = getJsonValue(json, "inputFile");
+      truthTableFile = getJsonValue(json, "truthTableFile");
+      isTraining = Boolean.parseBoolean(getJsonValue(json, "isTraining"));
+      useRandomWeights = Boolean.parseBoolean(getJsonValue(json, "useRandomWeights"));
+      low = Double.parseDouble(getJsonValue(json, "low"));
+      high = Double.parseDouble(getJsonValue(json, "high"));
+      lambda = Double.parseDouble(getJsonValue(json, "lambda"));
+      maxIterations = Integer.parseInt(getJsonValue(json, "maxIterations"));
+      errorThreshold = Double.parseDouble(getJsonValue(json, "errorThreshold"));
+      shouldRun = Boolean.parseBoolean(getJsonValue(json, "shouldRun"));
+      activationFunction = getJsonValue(json, "activationFunction");
+      showInputTable = Boolean.parseBoolean(getJsonValue(json, "showInputTable"));
+      showTruthTable = Boolean.parseBoolean(getJsonValue(json, "showTruthTable"));
+      loadFile = getJsonValue(json, "loadFile");
+      saveFile = getJsonValue(json, "saveFile");
+
+      if (activationFunction.equals("tanh"))
+      {
+         activationFn = this::tanh;
+         activationDerivFn = this::tanhDerivative;
+      }
+      else if (activationFunction.equals("linear"))
+      {
+         activationFn = this::linear;
+         activationDerivFn = this::linearDerivative;
+      }
+      else
+      {
+         activationFn = this::sigmoid;
+         activationDerivFn = this::sigmoidDerivative;
+      }
+   } // setConfig(String configFile)
 
 /*
-* Prints current network config including training parameters when applicable.
+* Extracts the raw value string for the given key from a JSON string.
+* Searches for "key": and returns trimmed text up to the next comma or
+* closing brace. Returns empty string if the key is not found.
+*/
+   private String getJsonValue(String json, String key)
+   {
+      String result = "";
+      int keyIdx = json.indexOf("\"" + key + "\"");
+
+      if (keyIdx != -1)
+      {
+         int colonIdx = json.indexOf(":", keyIdx);
+         int commaIdx = json.indexOf(",", colonIdx);
+         int braceIdx = json.indexOf("}", colonIdx);
+         int endIdx   = (commaIdx != -1 && commaIdx < braceIdx) ? commaIdx : braceIdx;
+         result = json.substring(colonIdx + 1, endIdx).trim().replace("\"", "");
+      }
+
+      return result;
+   } // getJsonValue(String json, String key)
+
+/*
+* Prints current network config including file names and training parameters
+* when applicable. Only echoes file names for files that will actually be used.
 */
    public void echoConfig()
    {
+      System.out.println("Config File: " + configFile);
       System.out.println("Network Configuration: " + inputLayer + "-" + hiddenLayer + "-" + outputLayer);
       System.out.println("Number of Test Cases: " + numCases);
-      System.out.println("Weight Initialization: " + (useRandomWeights ? "Random" : "Fixed"));
-      System.out.println("Run After Training: " + shouldRun);
+      System.out.println("Input File: " + inputFile);
+      System.out.println("Activation Function: " + activationFunction);
       System.out.println("Mode: " + (isTraining ? "Training" : "Running"));
+      System.out.println("Run After Training: " + shouldRun);
 
       if (isTraining)
       {
          System.out.println("\nTraining Parameters:");
-         System.out.println("Random Number Range: [" + low + ", " + high + "]");
+         System.out.println("Truth Table File: " + truthTableFile);
+         System.out.println("Weight Initialization: " + (useRandomWeights ? "Random" : "Fixed"));
+
+         if (useRandomWeights)
+         {
+            System.out.println("Random Number Range: [" + low + ", " + high + "]");
+         }
+
          System.out.println("Max Iterations: " + maxIterations);
          System.out.println("Error Threshold: " + errorThreshold);
          System.out.println("Lambda: " + lambda);
+      } // if (isTraining)
+
+      if (loadFile != null && loadFile.length() > 0)
+      {
+         System.out.println("Load File: " + loadFile);
+      }
+
+      if (saveFile != null && saveFile.length() > 0)
+      {
+         System.out.println("Save File: " + saveFile);
       }
    } // echoConfig()
 
 /*
-* Allocates memory for all network arrays. Training-only arrays
-* are only allocated when the network is in training mode.
+* Allocates memory for all network arrays. Training-only arrays are only
+* allocated when the network is in training mode.
 */
    public void allocateMemory()
    {
@@ -125,37 +206,78 @@ public class ABCbp
       F = new double[outputLayer];
       wKJ = new double[inputLayer][hiddenLayer];
       wJI = new double[hiddenLayer][outputLayer];
-
       inputs = new double[numCases][inputLayer];
-      results = new double[numCases][outputLayer];
+
+      if (!(isTraining && !shouldRun))
+      {
+         results = new double[numCases][outputLayer];
+      }
 
       if (isTraining)
       {
          targets = new double[numCases][outputLayer];
-         deltaWKJ = new double[inputLayer][hiddenLayer];
-         deltaWJI = new double[hiddenLayer][outputLayer];
+         thetaJ = new double[hiddenLayer];
          psiI = new double[outputLayer];
       }
    } // allocateMemory()
 
 /*
-* Populate all of the network arrays based on the type of initialization
-* (i.e. random or fixed) and whether the network is training or not.
+* Reads binary input activations from the given file into the inputs array.
 */
-   public void populateArrays()
+   private void loadInputs(String filename) throws Exception
    {
-      setInputTable();
+      DataInputStream in = new DataInputStream(new FileInputStream(filename));
+
+      for (int c = 0; c < numCases; ++c)
+      {
+         for (int k = 0; k < inputLayer; ++k)
+         {
+            inputs[c][k] = in.readDouble();
+         }
+      }
+
+      in.close();
+   } // loadInputs(String filename)
+
+/*
+* Reads a whitespace-delimited text truth table from the given file
+* into the targets array. One row per case.
+*/
+   private void loadTruthTable(String filename) throws Exception
+   {
+      BufferedReader br = new BufferedReader(new FileReader(filename));
+
+      for (int c = 0; c < numCases; ++c)
+      {
+         String[] tokens = br.readLine().trim().split("\\s+");
+         for (int i = 0; i < outputLayer; ++i)
+         {
+            targets[c][i] = Double.parseDouble(tokens[i]);
+         }
+      }
+
+      br.close();
+   } // loadTruthTable(String filename)
+
+/*
+* Populates network arrays from external files specified in the config.
+* Input activations are loaded from binary; truth table from plain text.
+* Weight arrays are then initialized (random, loaded from file, or fixed).
+*/
+   public void populateArrays() throws Exception
+   {
+      loadInputs(inputFile);
 
       if (isTraining)
       {
-         setTruthTable();
+         loadTruthTable(truthTableFile);
       }
 
       if (useRandomWeights)
       {
          useRandomWeights();
       }
-      else if ((loadFile != null && saveFile != null) && (loadFile.length() > 0 && saveFile.length() > 0))
+      else if (loadFile != null && loadFile.length() > 0)
       {
          useLoadedWeights();
       }
@@ -164,31 +286,6 @@ public class ABCbp
          useFixedWeights();
       }
    } // populateArrays()
-
-/*
-* Sets input values for all relevant test cases, contingent on the function
-* that is being optimized, such as AND, OR, XOR, or a[0] XOR a[1] AND a[2]
-* for A=3.
-*/
-   public void setInputTable()
-   {
-      inputs[0][0] = 0.0; inputs[0][1] = 0.0;
-      inputs[1][0] = 0.0; inputs[1][1] = 1.0;
-      inputs[2][0] = 1.0; inputs[2][1] = 0.0;
-      inputs[3][0] = 1.0; inputs[3][1] = 1.0;
-
-/*
-* a[0] XOR a[1] AND a[2] (A=3)
-inputs[0][0] = 0.0; inputs[0][1] = 0.0; inputs[0][2] = 0.0;
-inputs[1][0] = 0.0; inputs[1][1] = 0.0; inputs[1][2] = 1.0;
-inputs[2][0] = 0.0; inputs[2][1] = 1.0; inputs[2][2] = 0.0;
-inputs[3][0] = 0.0; inputs[3][1] = 1.0; inputs[3][2] = 1.0;
-inputs[4][0] = 1.0; inputs[4][1] = 0.0; inputs[4][2] = 0.0;
-inputs[5][0] = 1.0; inputs[5][1] = 0.0; inputs[5][2] = 1.0;
-inputs[6][0] = 1.0; inputs[6][1] = 1.0; inputs[6][2] = 0.0;
-inputs[7][0] = 1.0; inputs[7][1] = 1.0; inputs[7][2] = 1.0;
-*/
-   } // setInputTable()
 
 /*
 * Prints the input table by iterating through the inputs.
@@ -208,7 +305,7 @@ inputs[7][0] = 1.0; inputs[7][1] = 1.0; inputs[7][2] = 1.0;
 
 /*
 * Prints the truth table by iterating through the inputs and targets,
-* showing all output columns for each test case. Ensures that the test case is valid.
+* showing all output columns for each test case.
 */
    public void printTruthTable()
    {
@@ -267,62 +364,6 @@ inputs[7][0] = 1.0; inputs[7][1] = 1.0; inputs[7][2] = 1.0;
    } // useFixedWeights()
 
 /*
-* Sets the expected target output values for all test cases based on the
-* desired logic functions (e.g., AND, OR, XOR) for C output activations.
-*/
-   public void setTruthTable()
-   {
-      targets[0][0] = 0.0; targets[0][1] = 0.0; targets[0][2] = 0.0;
-      targets[1][0] = 0.0; targets[1][1] = 1.0; targets[1][2] = 1.0;
-      targets[2][0] = 0.0; targets[2][1] = 1.0; targets[2][2] = 1.0;
-      targets[3][0] = 1.0; targets[3][1] = 1.0; targets[3][2] = 0.0;
-
-/*
-* XOR (C=1)
-targets[0][0] = 0.0;
-targets[1][0] = 1.0;
-targets[2][0] = 1.0;
-targets[3][0] = 0.0;
-*/
-
-/*
-* AND (C=1)
-targets[0][0] = 0.0;
-targets[1][0] = 0.0;
-targets[2][0] = 0.0;
-targets[3][0] = 1.0;
-*/
-
-/*
-* OR (C=1)
-targets[0][0] = 0.0;
-targets[1][0] = 1.0;
-targets[2][0] = 1.0;
-targets[3][0] = 1.0;
-*/
-
-/*
-* AND, OR, XOR (C=3)
-targets[0][0] = 0.0; targets[0][1] = 0.0; targets[0][2] = 0.0;
-targets[1][0] = 0.0; targets[1][1] = 1.0; targets[1][2] = 1.0;
-targets[2][0] = 0.0; targets[2][1] = 1.0; targets[2][2] = 1.0;
-targets[3][0] = 1.0; targets[3][1] = 1.0; targets[3][2] = 0.0;
-*/
-
-/*
-* a[0] XOR a[1] AND a[2] (A=3, C=1)
-targets[0][0] = 0.0;
-targets[1][0] = 0.0;
-targets[2][0] = 0.0;
-targets[3][0] = 1.0;
-targets[4][0] = 0.0;
-targets[5][0] = 1.0;
-targets[6][0] = 0.0;
-targets[7][0] = 0.0;
-*/
-   } // setTruthTable()
-
-/*
 * Uses the weights from the loaded file.
 */
    public void useLoadedWeights()
@@ -359,7 +400,7 @@ targets[7][0] = 0.0;
             System.out.println("Error: Weight file config (" + fileA + "-" + fileB + "-" + fileC
                + ") does not match network config ("
                + inputLayer + "-" + hiddenLayer + "-" + outputLayer + ").");
-         } // if (fileA == inputLayer && fileB == hiddenLayer && fileC == outputLayer)
+         } // else
 
          in.close();
       } // try
@@ -416,21 +457,23 @@ targets[7][0] = 0.0;
    } // randomize(double low, double high)
 
 /*
-* Generalizable activation function. User can specify this to be
-* sigmoid or linear.
+* Dispatches to the configured activation function (sigmoid, tanh, or linear).
+* The function reference is bound once in setConfig(); no conditional is
+* evaluated at call time.
 */
    public double activation(double x)
    {
-      return sigmoid(x);
+      return activationFn.applyAsDouble(x);
    }
 
 /*
-* Generalizable activation function derivative. User can specify this
-* to be the derivative of sigmoid or linear.
+* Dispatches to the configured activation function derivative.
+* The function reference is bound once in setConfig(); no conditional is
+* evaluated at call time.
 */
    public double activationDerivative(double num)
    {
-      return sigmoidDerivative(num);
+      return activationDerivFn.applyAsDouble(num);
    }
 
 /*
@@ -449,6 +492,30 @@ targets[7][0] = 0.0;
       double s = sigmoid(x);
       return s * (1.0 - s);
    }
+
+/*
+* Hyperbolic tangent activation using the numerically stable epsilon formulation
+* from the design document. eps(x) = (x < 0) ? 1 : -1. exp(eps * 2x) is computed
+* once and reused in both the numerator and denominator. Math.tanh() is NOT used
+* because its behavior for large |x| is not guaranteed across implementations.
+*/
+   public double tanh(double x)
+   {
+      double eps = (x < 0) ? 1.0 : -1.0;
+      double e = Math.exp(eps * 2.0 * x);
+      return eps * (e - 1.0) / (e + 1.0);
+   } // tanh(double x)
+
+/*
+* Hyperbolic tangent derivative: f'(x) = 1 - tanh^2(x).
+* tanh(x) is recomputed directly via the method call rather than using
+* any cached activation value.
+*/
+   public double tanhDerivative(double x)
+   {
+      double t = tanh(x);
+      return 1.0 - t * t;
+   } // tanhDerivative(double x)
 
 /*
 * Linear activation: f(x) = x
@@ -478,17 +545,16 @@ targets[7][0] = 0.0;
 
       for (j = 0; j < hiddenLayer; ++j)
       {
-         double thetaJ = 0.0;
-
+         thetaJ[j] = 0.0;
          for (k = 0; k < inputLayer; ++k)
          {
-            thetaJ += a[k] * wKJ[k][j];
+            thetaJ[j] += a[k] * wKJ[k][j];
          }
 
-         h[j] = activation(thetaJ);
+         h[j] = activation(thetaJ[j]);
       } // for (j = 0; j < hiddenLayer; ++j)
 
-      double twice_error = 0.0;
+      double twiceError = 0.0;
 
       for (i = 0; i < outputLayer; ++i)
       {
@@ -504,10 +570,10 @@ targets[7][0] = 0.0;
 
          psiI[i] = omegaI * activationDerivative(thetaI);
 
-         twice_error += omegaI * omegaI;
+         twiceError += omegaI * omegaI;
       } // for (i = 0; i < outputLayer; ++i)
 
-      return twice_error;
+      return twiceError;
    } // runTrainCase(int caseIndex)
 
 /*
@@ -587,16 +653,16 @@ targets[7][0] = 0.0;
                for (i = 0; i < outputLayer; ++i)
                {
                   omegaJ += psiI[i] * wJI[j][i];
-                  deltaWJI[j][i] = lambda * h[j] * psiI[i];
-                  wJI[j][i] += deltaWJI[j][i];
+                  double deltaWJI = lambda * h[j] * psiI[i];
+                  wJI[j][i] += deltaWJI;
                }
 
                psiJ = omegaJ * activationDerivative(thetaJ[j]);
 
                for (k = 0; k < inputLayer; ++k)
                {
-                  deltaWKJ[k][j] = lambda * a[k] * psiJ;
-                  wKJ[k][j] += deltaWKJ[k][j];
+                  double deltaWKJ = lambda * a[k] * psiJ;
+                  wKJ[k][j] += deltaWKJ;
                }
             } // for (j = 0; j < hiddenLayer; ++j)
          } // for (caseIndex = 0; caseIndex < numCases; ++caseIndex)
@@ -666,6 +732,7 @@ targets[7][0] = 0.0;
 /*
 * Reports run results with expected vs actual outputs for all output nodes.
 * Displays inputs, expected targets, and actual F[i] values per case.
+* Output values are printed to 17 decimal places.
 */
    public void reportRunResults()
    {
@@ -706,7 +773,7 @@ targets[7][0] = 0.0;
          System.out.print("| ");
          for (i = 0; i < outputLayer; ++i)
          {
-            System.out.print(results[caseIndex][i] + "\t");
+            System.out.printf("%.17f\t", results[caseIndex][i]);
          }
          System.out.println();
       } // for (caseIndex = 0; caseIndex < numCases; ++caseIndex)

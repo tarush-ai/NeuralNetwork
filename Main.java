@@ -1,21 +1,23 @@
 /*
 * Author: Tarush Gupta
 * Date: March 12, 2026
-* Description: Main driver class for the ABC Neural Net.
-*              Execution flow driven entirely by setConfig().
+* Description: Main driver class for the ABCbp Neural Net.
+*              Execution flow driven entirely by config.json at runtime.
 *              Timing is measured outside train/run and stored for reporting.
 */
 public class Main
 {
 /*
-* Entry point for the ABC neural network. Configures, allocates, populates,
-* trains or runs the network, and optionally saves weights to a binary file.
+* Entry point for the ABCbp neural network. Reads config from file, allocates,
+* populates, trains or runs the network, and optionally saves weights.
 */
-   public static void main(String[] args)
+   public static void main(String[] args) throws Exception
    {
-      ABC network = new ABC();
+      String configFile = "config.json";
 
-      network.setConfig();
+      ABCbp network = new ABCbp();
+
+      network.setConfig(configFile);
 
       network.echoConfig();
 
