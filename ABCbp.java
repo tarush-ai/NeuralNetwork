@@ -12,7 +12,6 @@ import java.io.DataOutputStream;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.FileReader;
-import java.util.function.DoubleUnaryOperator;
 
 public class ABCbp
 {
@@ -72,14 +71,32 @@ public class ABCbp
    public String inputFile;
    public String truthTableFile;
    public String configFile;
-   public String activationFunction;
-   public DoubleUnaryOperator activationFn;
-   public DoubleUnaryOperator activationDerivFn;
+
+
+/*
+* Threshold function. Change this line (and activationDerivative below)
+* to switch activation functions: sigmoid(x), tanh(x), or linear(x).
+*/
+   public double activation(double x)
+   {
+      return sigmoid(x);
+   } // activation(double x)
+
+/*
+* Threshold function derivative. Change this line to match the choice in
+* activation above: sigmoidDerivative(x), tanhDerivative(x), or linearDerivative(x).
+*/
+   public double activationDerivative(double x)
+   {
+      return sigmoidDerivative(x);
+   } // activationDerivative(double x)
+
+/**
+ * End of the user configuration.
+ */
 
 /*
 * Reads all network parameters from the given JSON config file.
-* Sets activationFn and activationDerivFn via method reference based
-* on the activationFunction field — no conditional is evaluated in the loop.
 */
    public void setConfig(String configFile) throws Exception
    {
@@ -109,33 +126,14 @@ public class ABCbp
       maxIterations = Integer.parseInt(getJsonValue(json, "maxIterations"));
       errorThreshold = Double.parseDouble(getJsonValue(json, "errorThreshold"));
       shouldRun = Boolean.parseBoolean(getJsonValue(json, "shouldRun"));
-      activationFunction = getJsonValue(json, "activationFunction");
       showInputTable = Boolean.parseBoolean(getJsonValue(json, "showInputTable"));
       showTruthTable = Boolean.parseBoolean(getJsonValue(json, "showTruthTable"));
       loadFile = getJsonValue(json, "loadFile");
       saveFile = getJsonValue(json, "saveFile");
-
-      if (activationFunction.equals("tanh"))
-      {
-         activationFn = this::tanh;
-         activationDerivFn = this::tanhDerivative;
-      }
-      else if (activationFunction.equals("linear"))
-      {
-         activationFn = this::linear;
-         activationDerivFn = this::linearDerivative;
-      }
-      else
-      {
-         activationFn = this::sigmoid;
-         activationDerivFn = this::sigmoidDerivative;
-      }
    } // setConfig(String configFile)
 
 /*
 * Extracts the raw value string for the given key from a JSON string.
-* Searches for "key": and returns trimmed text up to the next comma or
-* closing brace. Returns empty string if the key is not found.
 */
    private String getJsonValue(String json, String key)
    {
@@ -155,8 +153,7 @@ public class ABCbp
    } // getJsonValue(String json, String key)
 
 /*
-* Prints current network config including file names and training parameters
-* when applicable. Only echoes file names for files that will actually be used.
+* Prints current network config including file names and training parameters when applicable. 
 */
    public void echoConfig()
    {
@@ -164,9 +161,8 @@ public class ABCbp
       System.out.println("Network Configuration: " + inputLayer + "-" + hiddenLayer + "-" + outputLayer);
       System.out.println("Number of Test Cases: " + numCases);
       System.out.println("Input File: " + inputFile);
-      System.out.println("Activation Function: " + activationFunction);
       System.out.println("Mode: " + (isTraining ? "Training" : "Running"));
-      System.out.println("Run After Training: " + shouldRun);
+      System.out.println("Runing: " + shouldRun);
 
       if (isTraining)
       {
@@ -196,8 +192,7 @@ public class ABCbp
    } // echoConfig()
 
 /*
-* Allocates memory for all network arrays. Training-only arrays are only
-* allocated when the network is in training mode.
+* Allocates memory for all network arrays. 
 */
    public void allocateMemory()
    {
@@ -208,7 +203,7 @@ public class ABCbp
       wJI = new double[hiddenLayer][outputLayer];
       inputs = new double[numCases][inputLayer];
 
-      if (!(isTraining && !shouldRun))
+      if (!isTraining || shouldRun)
       {
          results = new double[numCases][outputLayer];
       }
@@ -240,8 +235,7 @@ public class ABCbp
    } // loadInputs(String filename)
 
 /*
-* Reads a whitespace-delimited text truth table from the given file
-* into the targets array. One row per case.
+* Reads a truth table from the given file into the targets array.
 */
    private void loadTruthTable(String filename) throws Exception
    {
@@ -260,8 +254,7 @@ public class ABCbp
    } // loadTruthTable(String filename)
 
 /*
-* Populates network arrays from external files specified in the config.
-* Input activations are loaded from binary; truth table from plain text.
+* Populates network arrays from external files specified in the config, and loaded.
 * Weight arrays are then initialized (random, loaded from file, or fixed).
 */
    public void populateArrays() throws Exception
@@ -443,7 +436,7 @@ public class ABCbp
       } // try
       catch (Exception e)
       {
-         e.printStackTrace();
+         System.out.println("Unable to save weights to " + saveFile);
       }
    } // saveWeights()
 
@@ -455,27 +448,6 @@ public class ABCbp
    {
       return low + Math.random() * (high - low);
    } // randomize(double low, double high)
-
-/*
-* Dispatches to the configured activation function (sigmoid, tanh, or linear).
-* The function reference is bound once in setConfig(); no conditional is
-* evaluated at call time.
-*/
-   public double activation(double x)
-   {
-      return activationFn.applyAsDouble(x);
-   }
-
-/*
-* Dispatches to the configured activation function derivative.
-* The function reference is bound once in setConfig(); no conditional is
-* evaluated at call time.
-*/
-   public double activationDerivative(double num)
-   {
-      return activationDerivFn.applyAsDouble(num);
-   }
-
 /*
 * Sigmoid activation: f(x) = 1 / (1 + e^-x). Uses Math.exp().
 */
@@ -485,19 +457,17 @@ public class ABCbp
    } // sigmoid(double x)
 
 /*
-* Sigmoid activation derivative: f'(x) = f(x) * (1 - f(x))
+* Sigmoid activation derivative: f'(x) = f(x) * (1 - f(x)).
 */
    public double sigmoidDerivative(double x)
    {
-      double s = sigmoid(x);
-      return s * (1.0 - s);
-   }
+      double val = activation(x);
+      return val * (1.0 - val);
+   } // sigmoidDerivative(double x)
 
 /*
-* Hyperbolic tangent activation using the numerically stable epsilon formulation
-* from the design document. eps(x) = (x < 0) ? 1 : -1. exp(eps * 2x) is computed
-* once and reused in both the numerator and denominator. Math.tanh() is NOT used
-* because its behavior for large |x| is not guaranteed across implementations.
+* Hyperbolic tangent activation using eps(x) = (x < 0) ? 1 : -1. exp(eps * 2x) is computed
+* once and reused in both the numerator and denominator. 
 */
    public double tanh(double x)
    {
@@ -507,14 +477,12 @@ public class ABCbp
    } // tanh(double x)
 
 /*
-* Hyperbolic tangent derivative: f'(x) = 1 - tanh^2(x).
-* tanh(x) is recomputed directly via the method call rather than using
-* any cached activation value.
+* Hyperbolic tangent derivative: f'(x) = 1 - f^2(x).
 */
    public double tanhDerivative(double x)
    {
-      double t = tanh(x);
-      return 1.0 - t * t;
+      double val = activation(x);
+      return 1.0 - val * val;
    } // tanhDerivative(double x)
 
 /*
@@ -523,15 +491,15 @@ public class ABCbp
    public double linear(double x)
    {
       return x;
-   }
+   } // linear(double x)
 
 /*
-* Linear activation derivative: f'(x) = 1
+* Linear activation derivative: f'(x) = 1.
 */
    public double linearDerivative(double x)
    {
       return 1.0;
-   }
+   } // linearDerivative(double x)
 
 /*
 * Sets input activations from the given training case and runs the
@@ -591,13 +559,13 @@ public class ABCbp
 */
       for (j = 0; j < hiddenLayer; ++j)
       {
-         double thetaJ = 0.0;
+         double thetaJscalar = 0.0;
          for (k = 0; k < inputLayer; ++k)
          {
-            thetaJ += a[k] * wKJ[k][j];
+            thetaJscalar += a[k] * wKJ[k][j];
          }
 
-         h[j] = activation(thetaJ);
+         h[j] = activation(thetaJscalar);
       }
 
 /*
@@ -617,7 +585,6 @@ public class ABCbp
 
 /*
 * Trains the network using steepest descent across all training cases.
-* Stores final iteration count and error in trainIterations and trainError.
 * Backward: omega_i -> psi_i -> Omega_j -> Psi_j
 * Gradients: delta_w_ji = lambda * h_j * psi_i, delta_w_kj = lambda * a_k * Psi_j
 */
@@ -648,7 +615,6 @@ public class ABCbp
             for (j = 0; j < hiddenLayer; ++j)
             {
                double omegaJ = 0.0;
-               double psiJ = 0.0;
 
                for (i = 0; i < outputLayer; ++i)
                {
@@ -657,7 +623,7 @@ public class ABCbp
                   wJI[j][i] += deltaWJI;
                }
 
-               psiJ = omegaJ * activationDerivative(thetaJ[j]);
+               double psiJ = omegaJ * activationDerivative(thetaJ[j]);
 
                for (k = 0; k < inputLayer; ++k)
                {
@@ -727,12 +693,10 @@ public class ABCbp
       {
          a[k] = inputs[caseIndex][k];
       }
-   }
+   } // populateInput(int caseIndex)
 
 /*
 * Reports run results with expected vs actual outputs for all output nodes.
-* Displays inputs, expected targets, and actual F[i] values per case.
-* Output values are printed to 17 decimal places.
 */
    public void reportRunResults()
    {
@@ -745,7 +709,7 @@ public class ABCbp
          System.out.print("\nInputs");
          System.out.print("\t\t");
       }
-      if (showTruthTable && isTraining)
+      if (showTruthTable && targets != null)
       {
          System.out.print("| Expected\t");
       }
