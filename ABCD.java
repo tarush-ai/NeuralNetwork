@@ -1,10 +1,10 @@
 /*
 * Author: Tarush Gupta
-* Date: March 25, 2026
-* Description: A-B-C Neural Network with gradient descent training.
-*              Generalizes AB1 to support multiple output activations F[i].
-*              Supports configurable layers, rand/fixed init, training/running modes,
-*              and binary weight save/load.
+* Date: April 21, 2026
+* Description: A-B-C-D four-activation-layer neural network with backpropagation.
+*              Supports configurable layer sizes, random weight initialization or
+*              binary weight load/save, and training or running modes selected at
+*              runtime via a JSON configuration file.
 */
 import java.io.BufferedReader;
 import java.io.DataInputStream;
@@ -13,13 +13,21 @@ import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.FileReader;
 
-public class ABCbp
+public class ABCD
 {
+   public static final int INPUTLAYER = 0;
+   public static final int HIDDENLAYER1 = 1;
+   public static final int HIDDENLAYER2 = 2;
+   public static final int OUTPUTLAYER = 3;
+   public static final int activationLayerCount = 4;
+   public static final int lastHiddenLayer = 2;
+
 /*
-* Network config
+* Network configuration
 */
    public int inputLayer;
-   public int hiddenLayer;
+   public int hiddenLayer1;
+   public int hiddenLayer2;
    public int outputLayer;
    public double lambda;
    public double low;
@@ -30,15 +38,11 @@ public class ABCbp
    public int numCases;
 
 /*
-* Network arrays
+* Network arrays.
 */
-   public double[] a;
-   public double[] h;
-   public double[] F;
-   public double[][] wKJ;
-   public double[][] wJI;
+   public double[][] a;
+   public double[][][] w;
    public double[][] inputs;
-   public double[] thetaJ;
 
 /*
 * Run results
@@ -46,10 +50,11 @@ public class ABCbp
    public double[][] results;
 
 /*
-* Training-only arrays
+* Training-only arrays.
 */
    public double[][] targets;
-   public double[] psiI;
+   public double[][] theta;
+   public double[][] psi;
 
 /*
 * Training results
@@ -91,9 +96,9 @@ public class ABCbp
       return sigmoidDerivative(x);
    } // activationDerivative(double x)
 
-/**
- * End of the user configuration.
- */
+/*
+* End of the user configuration.
+*/
 
 /*
 * Reads all network parameters from the given JSON config file.
@@ -113,7 +118,8 @@ public class ABCbp
       String json = sb.toString();
 
       inputLayer = Integer.parseInt(getJsonValue(json, "inputLayer"));
-      hiddenLayer = Integer.parseInt(getJsonValue(json, "hiddenLayer"));
+      hiddenLayer1 = Integer.parseInt(getJsonValue(json, "hiddenLayer1"));
+      hiddenLayer2 = Integer.parseInt(getJsonValue(json, "hiddenLayer2"));
       outputLayer = Integer.parseInt(getJsonValue(json, "outputLayer"));
       numCases = Integer.parseInt(getJsonValue(json, "numCases"));
       inputFile = getJsonValue(json, "inputFile");
@@ -134,6 +140,8 @@ public class ABCbp
 
 /*
 * Extracts the raw value string for the given key from a JSON string.
+* Searches for "key": and returns trimmed text up to the next comma or closing brace.
+* Returns empty string if the key is not found.
 */
    private String getJsonValue(String json, String key)
    {
@@ -145,7 +153,7 @@ public class ABCbp
          int colonIdx = json.indexOf(":", keyIdx);
          int commaIdx = json.indexOf(",", colonIdx);
          int braceIdx = json.indexOf("}", colonIdx);
-         int endIdx   = (commaIdx != -1 && commaIdx < braceIdx) ? commaIdx : braceIdx;
+         int endIdx = (commaIdx != -1 && commaIdx < braceIdx) ? commaIdx : braceIdx;
          result = json.substring(colonIdx + 1, endIdx).trim().replace("\"", "");
       }
 
@@ -153,22 +161,23 @@ public class ABCbp
    } // getJsonValue(String json, String key)
 
 /*
-* Prints current network config including file names and training parameters when applicable. 
+* Prints current network config including file names and training parameters when applicable.
 */
    public void echoConfig()
    {
       System.out.println("Config File: " + configFile);
-      System.out.println("Network Configuration: " + inputLayer + "-" + hiddenLayer + "-" + outputLayer);
+      System.out.println("Network Configuration: " + inputLayer + "-" + hiddenLayer1
+         + "-" + hiddenLayer2 + "-" + outputLayer);
       System.out.println("Number of Test Cases: " + numCases);
       System.out.println("Input File: " + inputFile);
       System.out.println("Mode: " + (isTraining ? "Training" : "Running"));
-      System.out.println("Runing: " + shouldRun);
+      System.out.println("Running: " + shouldRun);
 
       if (isTraining)
       {
          System.out.println("\nTraining Parameters:");
          System.out.println("Truth Table File: " + truthTableFile);
-         System.out.println("Weight Initialization: " + (useRandomWeights ? "Random" : "Fixed"));
+         System.out.println("Weight Initialization: " + (useRandomWeights ? "Random" : "Loaded"));
 
          if (useRandomWeights)
          {
@@ -192,15 +201,22 @@ public class ABCbp
    } // echoConfig()
 
 /*
-* Allocates memory for all network arrays. 
+* Allocates memory for all network arrays. Training-only arrays (theta, psi, targets)
+* are only allocated when the network is in training mode.
 */
    public void allocateMemory()
    {
-      a = new double[inputLayer];
-      h = new double[hiddenLayer];
-      F = new double[outputLayer];
-      wKJ = new double[inputLayer][hiddenLayer];
-      wJI = new double[hiddenLayer][outputLayer];
+      a = new double[activationLayerCount][];
+      a[INPUTLAYER] = new double[inputLayer];
+      a[HIDDENLAYER1] = new double[hiddenLayer1];
+      a[HIDDENLAYER2] = new double[hiddenLayer2];
+      a[OUTPUTLAYER] = new double[outputLayer];
+
+      w = new double[activationLayerCount - 1][][];
+      w[INPUTLAYER] = new double[inputLayer][hiddenLayer1];
+      w[HIDDENLAYER1] = new double[hiddenLayer1][hiddenLayer2];
+      w[HIDDENLAYER2] = new double[hiddenLayer2][outputLayer];
+
       inputs = new double[numCases][inputLayer];
 
       if (!isTraining || shouldRun)
@@ -211,9 +227,14 @@ public class ABCbp
       if (isTraining)
       {
          targets = new double[numCases][outputLayer];
-         thetaJ = new double[hiddenLayer];
-         psiI = new double[outputLayer];
-      }
+         theta = new double[activationLayerCount - 1][];
+         theta[HIDDENLAYER1] = new double[hiddenLayer1];
+         theta[HIDDENLAYER2] = new double[hiddenLayer2];
+
+         psi = new double[activationLayerCount][];
+         psi[HIDDENLAYER2] = new double[hiddenLayer2];
+         psi[OUTPUTLAYER] = new double[outputLayer];
+      } // if (isTraining)
    } // allocateMemory()
 
 /*
@@ -225,9 +246,9 @@ public class ABCbp
 
       for (int c = 0; c < numCases; ++c)
       {
-         for (int k = 0; k < inputLayer; ++k)
+         for (int m = 0; m < inputLayer; ++m)
          {
-            inputs[c][k] = in.readDouble();
+            inputs[c][m] = in.readDouble();
          }
       }
 
@@ -254,8 +275,8 @@ public class ABCbp
    } // loadTruthTable(String filename)
 
 /*
-* Populates network arrays from external files specified in the config, and loaded.
-* Weight arrays are then initialized (random, loaded from file, or fixed).
+* Loads inputs and (if training) targets, then initializes weights from
+* random values or a saved binary file as configured.
 */
    public void populateArrays() throws Exception
    {
@@ -274,10 +295,6 @@ public class ABCbp
       {
          useLoadedWeights();
       }
-      else
-      {
-         useFixedWeights();
-      }
    } // populateArrays()
 
 /*
@@ -288,9 +305,9 @@ public class ABCbp
       System.out.println("\nInput Table:");
       for (int c = 0; c < numCases; ++c)
       {
-         for (int k = 0; k < inputLayer; ++k)
+         for (int m = 0; m < inputLayer; ++m)
          {
-            System.out.print(inputs[c][k] + "\t");
+            System.out.print(inputs[c][m] + "\t");
          }
          System.out.println();
       }
@@ -305,9 +322,9 @@ public class ABCbp
       System.out.println("\nTruth Table:");
       for (int c = 0; c < numCases; ++c)
       {
-         for (int k = 0; k < inputLayer; ++k)
+         for (int m = 0; m < inputLayer; ++m)
          {
-            System.out.print(inputs[c][k] + "\t");
+            System.out.print(inputs[c][m] + "\t");
          }
          System.out.print("| ");
          for (int i = 0; i < outputLayer; ++i)
@@ -323,38 +340,39 @@ public class ABCbp
 */
    public void useRandomWeights()
    {
-      for (int k = 0; k < inputLayer; ++k)
+      int n;
+      int m;
+      int k;
+      int j;
+      int i;
+
+      n = HIDDENLAYER1; // mk layer: w[n-1] = w[INPUTLAYER]
+      for (m = 0; m < inputLayer; ++m)
       {
-         for (int j = 0; j < hiddenLayer; ++j)
+         for (k = 0; k < hiddenLayer1; ++k)
          {
-            wKJ[k][j] = randomize(low, high);
+            w[n-1][m][k] = randomize(low, high);
          }
       }
 
-      for (int j = 0; j < hiddenLayer; ++j)
+      n = HIDDENLAYER2; // kj layer: w[n-1] = w[HIDDENLAYER1]
+      for (k = 0; k < hiddenLayer1; ++k)
       {
-         for (int i = 0; i < outputLayer; ++i)
+         for (j = 0; j < hiddenLayer2; ++j)
          {
-            wJI[j][i] = randomize(low, high);
+            w[n-1][k][j] = randomize(low, high);
+         }
+      }
+
+      n = OUTPUTLAYER; // ji layer: w[n-1] = w[HIDDENLAYER2]
+      for (j = 0; j < hiddenLayer2; ++j)
+      {
+         for (i = 0; i < outputLayer; ++i)
+         {
+            w[n-1][j][i] = randomize(low, high);
          }
       }
    } // useRandomWeights()
-
-/*
-* Uses fixed weights for 2-2-1 testing.
-*/
-   public void useFixedWeights()
-   {
-      if (inputLayer == 2 && hiddenLayer == 2 && outputLayer == 1)
-      {
-         wKJ[0][0] = 0.76;
-         wKJ[0][1] = 0.9;
-         wKJ[1][0] = 0.9;
-         wKJ[1][1] = 0.76;
-         wJI[0][0] = 0.2;
-         wJI[1][0] = 0.2;
-      }
-   } // useFixedWeights()
 
 /*
 * Uses the weights from the loaded file.
@@ -368,31 +386,49 @@ public class ABCbp
          int fileA = in.readInt();
          int fileB = in.readInt();
          int fileC = in.readInt();
+         int fileD = in.readInt();
 
-         if (fileA == inputLayer && fileB == hiddenLayer && fileC == outputLayer)
+         if (fileA == inputLayer && fileB == hiddenLayer1
+            && fileC == hiddenLayer2 && fileD == outputLayer)
          {
-            for (int k = 0; k < inputLayer; ++k)
+            int n;
+            int m;
+            int k;
+            int j;
+            int i;
+
+            n = HIDDENLAYER1; // mk weights: w[n-1] = w[INPUTLAYER]
+            for (m = 0; m < inputLayer; ++m)
             {
-               for (int j = 0; j < hiddenLayer; ++j)
+               for (k = 0; k < hiddenLayer1; ++k)
                {
-                  wKJ[k][j] = in.readDouble();
+                  w[n-1][m][k] = in.readDouble();
                }
             }
 
-            for (int j = 0; j < hiddenLayer; ++j)
+            n = HIDDENLAYER2; // kj weights: w[n-1] = w[HIDDENLAYER1]
+            for (k = 0; k < hiddenLayer1; ++k)
             {
-               for (int i = 0; i < outputLayer; ++i)
+               for (j = 0; j < hiddenLayer2; ++j)
                {
-                  wJI[j][i] = in.readDouble();
+                  w[n-1][k][j] = in.readDouble();
                }
             }
-         } // if (fileA == inputLayer && fileB == hiddenLayer && fileC == outputLayer)
 
+            n = OUTPUTLAYER; // ji weights: w[n-1] = w[HIDDENLAYER2]
+            for (j = 0; j < hiddenLayer2; ++j)
+            {
+               for (i = 0; i < outputLayer; ++i)
+               {
+                  w[n-1][j][i] = in.readDouble();
+               }
+            }
+         } // if (fileA == inputLayer && fileB == hiddenLayer1 ...)
          else
          {
-            System.out.println("Error: Weight file config (" + fileA + "-" + fileB + "-" + fileC
-               + ") does not match network config ("
-               + inputLayer + "-" + hiddenLayer + "-" + outputLayer + ").");
+            System.out.println("Error: weight file config (" + fileA + "-" + fileB
+               + "-" + fileC + "-" + fileD + ") does not match network config ("
+               + inputLayer + "-" + hiddenLayer1 + "-" + hiddenLayer2 + "-" + outputLayer + ").");
          } // else
 
          in.close();
@@ -413,22 +449,40 @@ public class ABCbp
          DataOutputStream out = new DataOutputStream(new FileOutputStream(saveFile));
 
          out.writeInt(inputLayer);
-         out.writeInt(hiddenLayer);
+         out.writeInt(hiddenLayer1);
+         out.writeInt(hiddenLayer2);
          out.writeInt(outputLayer);
 
-         for (int k = 0; k < inputLayer; ++k)
+         int n;
+         int m;
+         int k;
+         int j;
+         int i;
+
+         n = HIDDENLAYER1; // mk weights: w[n-1] = w[INPUTLAYER]
+         for (m = 0; m < inputLayer; ++m)
          {
-            for (int j = 0; j < hiddenLayer; ++j)
+            for (k = 0; k < hiddenLayer1; ++k)
             {
-               out.writeDouble(wKJ[k][j]);
+               out.writeDouble(w[n-1][m][k]);
             }
          }
 
-         for (int j = 0; j < hiddenLayer; ++j)
+         n = HIDDENLAYER2; // kj weights: w[n-1] = w[HIDDENLAYER1]
+         for (k = 0; k < hiddenLayer1; ++k)
          {
-            for (int i = 0; i < outputLayer; ++i)
+            for (j = 0; j < hiddenLayer2; ++j)
             {
-               out.writeDouble(wJI[j][i]);
+               out.writeDouble(w[n-1][k][j]);
+            }
+         }
+
+         n = OUTPUTLAYER; // ji weights: w[n-1] = w[HIDDENLAYER2]
+         for (j = 0; j < hiddenLayer2; ++j)
+         {
+            for (i = 0; i < outputLayer; ++i)
+            {
+               out.writeDouble(w[n-1][j][i]);
             }
          }
 
@@ -481,7 +535,7 @@ public class ABCbp
 */
    public double tanhDerivative(double x)
    {
-      double val = activation(x);
+      double val = tanh(x);
       return 1.0 - val * val;
    } // tanhDerivative(double x)
 
@@ -502,100 +556,139 @@ public class ABCbp
    } // linearDerivative(double x)
 
 /*
-* Sets input activations from the given training case and runs the
-* network forward. Forward pass: theta_j -> h_j -> theta_i -> F_i
+* Runs the network forward on pre-populated input activations for the given
+* case. Forward pass: mk layer -> kj layer -> ji layer.
+* Computes psi[OUTPUTLAYER] for use in the backward pass.
 */
    public double runTrainCase(int caseIndex)
    {
-      int i;
-      int j;
+      int n;
+      int m;
       int k;
+      int j;
+      int i;
 
-      for (j = 0; j < hiddenLayer; ++j)
+/*
+* mk layer: n = HIDDENLAYER1.
+*/
+      n = HIDDENLAYER1;
+      for (k = 0; k < hiddenLayer1; ++k)
       {
-         thetaJ[j] = 0.0;
-         for (k = 0; k < inputLayer; ++k)
+         theta[n][k] = 0.0;
+         for (m = 0; m < inputLayer; ++m)
          {
-            thetaJ[j] += a[k] * wKJ[k][j];
+            theta[n][k] += a[n-1][m] * w[n-1][m][k];
          }
+         a[n][k] = activation(theta[n][k]);
+      } // for (k = 0; k < hiddenLayer1; ++k)
 
-         h[j] = activation(thetaJ[j]);
-      } // for (j = 0; j < hiddenLayer; ++j)
+/*
+* kj layer: n = HIDDENLAYER2.
+*/
+      n = HIDDENLAYER2;
+      for (j = 0; j < hiddenLayer2; ++j)
+      {
+         theta[n][j] = 0.0;
+         for (k = 0; k < hiddenLayer1; ++k)
+         {
+            theta[n][j] += a[n-1][k] * w[n-1][k][j];
+         }
+         a[n][j] = activation(theta[n][j]);
+      } // for (j = 0; j < hiddenLayer2; ++j)
 
       double twiceError = 0.0;
 
+/*
+* ji layer: n = OUTPUTLAYER.
+* omega_i = T_i - F_i, psi_i = omega_i * f'(theta_i), 2E += omega_i^2.
+*/
+      n = OUTPUTLAYER;
       for (i = 0; i < outputLayer; ++i)
       {
          double thetaI = 0.0;
-         for (j = 0; j < hiddenLayer; ++j)
+         for (j = 0; j < hiddenLayer2; ++j)
          {
-            thetaI += h[j] * wJI[j][i];
+            thetaI += a[n-1][j] * w[n-1][j][i];
          }
-
-         F[i] = activation(thetaI);
-
-         double omegaI = targets[caseIndex][i] - F[i];
-
-         psiI[i] = omegaI * activationDerivative(thetaI);
-
-         twiceError += omegaI * omegaI;
+         a[n][i]       = activation(thetaI);
+         double omegaI = targets[caseIndex][i] - a[n][i];
+         psi[n][i]     = omegaI * activationDerivative(thetaI);
+         twiceError   += omegaI * omegaI;
       } // for (i = 0; i < outputLayer; ++i)
 
       return twiceError;
    } // runTrainCase(int caseIndex)
 
 /*
-* Sets input activations from the given test case and runs the
-* network forward. Forward pass: theta_j -> h_j -> theta_i -> F_i
+* Runs the network forward on pre-populated input activations.
+* Forward pass: mk layer -> kj layer -> ji layer.
 */
    public void runTestCase()
    {
-      int i;
-      int j;
+      int n;
+      int m;
       int k;
+      int j;
+      int i;
 
 /*
-* Hidden layer: theta_j = sum_K a_K * w_kj, h_j = f(theta_j)
+* mk layer: n = HIDDENLAYER1.
 */
-      for (j = 0; j < hiddenLayer; ++j)
+      n = HIDDENLAYER1;
+      for (k = 0; k < hiddenLayer1; ++k)
       {
-         double thetaJscalar = 0.0;
-         for (k = 0; k < inputLayer; ++k)
+         double thetaAcc = 0.0;
+         for (m = 0; m < inputLayer; ++m)
          {
-            thetaJscalar += a[k] * wKJ[k][j];
+            thetaAcc += a[n-1][m] * w[n-1][m][k];
          }
-
-         h[j] = activation(thetaJscalar);
+         a[n][k] = activation(thetaAcc);
       }
 
 /*
-* Output layer: theta_i = sum_J h_J * w_ji, F_i = f(theta_i)
+* kj layer: n = HIDDENLAYER2.
 */
+      n = HIDDENLAYER2;
+      for (j = 0; j < hiddenLayer2; ++j)
+      {
+         double thetaAcc = 0.0;
+         for (k = 0; k < hiddenLayer1; ++k)
+         {
+            thetaAcc += a[n-1][k] * w[n-1][k][j];
+         }
+         a[n][j] = activation(thetaAcc);
+      }
+
+/*
+* ji layer: n = OUTPUTLAYER.
+*/
+      n = OUTPUTLAYER;
       for (i = 0; i < outputLayer; ++i)
       {
-         double thetaI = 0.0;
-         for (j = 0; j < hiddenLayer; ++j)
+         double thetaAcc = 0.0;
+         for (j = 0; j < hiddenLayer2; ++j)
          {
-            thetaI += h[j] * wJI[j][i];
+            thetaAcc += a[n-1][j] * w[n-1][j][i];
          }
-
-         F[i] = activation(thetaI);
+         a[n][i] = activation(thetaAcc);
       }
    } // runTestCase()
 
 /*
 * Trains the network using steepest descent across all training cases.
-* Backward: omega_i -> psi_i -> Omega_j -> Psi_j
-* Gradients: delta_w_ji = lambda * h_j * psi_i, delta_w_kj = lambda * a_k * Psi_j
+* Stores final iteration count and error in trainIterations and trainError.
+* Backward pass: ji layer -> kj/mk layers.
 */
    public void train()
    {
       int iteration = 0;
-      double avgError = 1.0;
+      double avgError = Double.MAX_VALUE;
       int caseIndex;
-      int i;
-      int j;
+      int n;
+      int m;
       int k;
+      int j;
+      int i;
       double totalError;
 
       while (iteration < maxIterations && avgError >= errorThreshold)
@@ -608,37 +701,49 @@ public class ABCbp
             totalError += runTrainCase(caseIndex);
 
 /*
-* Omega_j = sum_I psi_I * w_jI, Psi_j = Omega_j * f'(theta_j)
-* delta_w_ji = lambda * h_j * psi_i
-* delta_w_kj = lambda * a_k * Psi_j
+* ji layer: Omega_j = sum_I psi[n][I] * w[n-1][j][I], Psi[n-1][j] = Omega_j * f'(theta[n-1][j])
+* delta_w[n-1][j][i] = lambda * a[n-1][j] * psi[n][i]
 */
-            for (j = 0; j < hiddenLayer; ++j)
+            n = OUTPUTLAYER;
+            for (j = 0; j < hiddenLayer2; ++j)
             {
                double omegaJ = 0.0;
-
                for (i = 0; i < outputLayer; ++i)
                {
-                  omegaJ += psiI[i] * wJI[j][i];
-                  double deltaWJI = lambda * h[j] * psiI[i];
-                  wJI[j][i] += deltaWJI;
+                  omegaJ       += psi[n][i] * w[n-1][j][i];
+                  w[n-1][j][i] += lambda * a[n-1][j] * psi[n][i];
                }
+               psi[n-1][j] = omegaJ * activationDerivative(theta[n-1][j]);
+            } // for (j = 0; j < hiddenLayer2; ++j)
 
-               double psiJ = omegaJ * activationDerivative(thetaJ[j]);
-
-               for (k = 0; k < inputLayer; ++k)
+/*
+* kj/mk layers: Omega_k = sum_J psi[n][J] * w[n-1][k][J], psiK = Omega_k * f'(theta[n-1][k])
+* delta_w[n-1][k][j] = lambda * a[n-1][k] * psi[n][j], delta_w[n-2][m][k] = lambda * a[n-2][m] * psiK
+*/
+            n = HIDDENLAYER2;
+            for (k = 0; k < hiddenLayer1; ++k)
+            {
+               double omegaK = 0.0;
+               for (j = 0; j < hiddenLayer2; ++j)
                {
-                  double deltaWKJ = lambda * a[k] * psiJ;
-                  wKJ[k][j] += deltaWKJ;
+                  omegaK       += psi[n][j] * w[n-1][k][j];
+                  w[n-1][k][j] += lambda * a[n-1][k] * psi[n][j];
                }
-            } // for (j = 0; j < hiddenLayer; ++j)
+               double psiK = omegaK * activationDerivative(theta[n-1][k]);
+               for (m = 0; m < inputLayer; ++m)
+               {
+                  w[n-2][m][k] += lambda * a[n-2][m] * psiK;
+               }
+            } // for (k = 0; k < hiddenLayer1; ++k)
+
          } // for (caseIndex = 0; caseIndex < numCases; ++caseIndex)
 
-         avgError = totalError / (2.0 * (double) numCases); //runTrainCase() returns twice the error
+         avgError = totalError / (2.0 * (double) numCases);
          iteration++;
       } // while (iteration < maxIterations && avgError >= errorThreshold)
 
       trainIterations = iteration;
-      trainError = avgError;
+      trainError      = avgError;
    } // train()
 
 /*
@@ -665,7 +770,7 @@ public class ABCbp
 
 /*
 * Loops over all test cases, setting inputs and running the network.
-* Stores each output F[i] in results[caseIndex][i].
+* Stores each output a[OUTPUTLAYER][i] in results[caseIndex][i].
 */
    public void runTestCases()
    {
@@ -679,35 +784,35 @@ public class ABCbp
 
          for (i = 0; i < outputLayer; ++i)
          {
-            results[caseIndex][i] = F[i];
+            results[caseIndex][i] = a[OUTPUTLAYER][i];
          }
       }
    } // runTestCases()
 
 /*
-* Sets input activations from the given case and runs the network.
+* Sets input activations a[INPUTLAYER][m] from the given case index.
 */
    public void populateInput(int caseIndex)
    {
-      for (int k = 0; k < inputLayer; ++k)
+      for (int m = 0; m < inputLayer; ++m)
       {
-         a[k] = inputs[caseIndex][k];
+         a[INPUTLAYER][m] = inputs[caseIndex][m];
       }
    } // populateInput(int caseIndex)
 
 /*
 * Reports run results with expected vs actual outputs for all output nodes.
+* Output values are printed to four decimal places.
 */
    public void reportRunResults()
    {
       int caseIndex;
       int i;
-      int k;
+      int m;
 
       if (showInputTable)
       {
-         System.out.print("\nInputs");
-         System.out.print("\t\t");
+         System.out.print("\nInputs\t\t");
       }
       if (showTruthTable && targets != null)
       {
@@ -719,9 +824,9 @@ public class ABCbp
       {
          if (showInputTable)
          {
-            for (k = 0; k < inputLayer; ++k)
+            for (m = 0; m < inputLayer; ++m)
             {
-               System.out.print(inputs[caseIndex][k] + "\t");
+               System.out.print(inputs[caseIndex][m] + "\t");
             }
          }
 
@@ -737,11 +842,11 @@ public class ABCbp
          System.out.print("| ");
          for (i = 0; i < outputLayer; ++i)
          {
-            System.out.printf("%.17f\t", results[caseIndex][i]);
+            System.out.printf("%.4f\t", results[caseIndex][i]);
          }
          System.out.println();
       } // for (caseIndex = 0; caseIndex < numCases; ++caseIndex)
 
       System.out.println("Time to run: " + runTimeMs + " ms");
    } // reportRunResults()
-} // class ABCbp
+} // class ABCD

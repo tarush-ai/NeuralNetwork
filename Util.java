@@ -85,10 +85,26 @@ public class Util
          {1.0, 1.0, 1.0}
       };
 
+      double[][] inputs2in12case =
+      {
+         { 0.1,  0.1}, { 0.1,  0.9}, { 0.9,  0.1}, { 0.9,  0.9},
+         {-0.1, -0.1}, {-0.1,  1.1}, { 1.1, -0.1}, { 1.1,  1.1},
+         {-0.1,  0.1}, {-0.1,  1.1}, { 0.9,  0.1}, { 0.9,  1.1}
+      };
+
+      double[][] truth12case3out =
+      {
+         {0.0, 0.0, 0.0}, {0.0, 1.0, 1.0}, {0.0, 1.0, 1.0}, {1.0, 1.0, 0.0},
+         {0.0, 0.0, 0.0}, {0.0, 1.0, 1.0}, {0.0, 1.0, 1.0}, {1.0, 1.0, 0.0},
+         {0.0, 0.0, 0.0}, {0.0, 1.0, 1.0}, {0.0, 1.0, 1.0}, {1.0, 1.0, 0.0}
+      };
+
       saveInputs("data/inputs/inputs_2in_4case.bin", inputs2in4case);
       saveInputs("data/inputs/inputs_3in_8case.bin", inputs3in8case);
+      saveInputs("data/inputs/inputs_2in_12case.bin", inputs2in12case);
       saveTruthTable("data/truth/truth_andorxor_4case_3out.txt", truth3out4case);
       saveTruthTable("data/truth/truth_or_4case_1out.txt", truthOr4case);
       saveTruthTable("data/truth/truth_andorxor_8case_3out.txt", truth3out8case);
+      saveTruthTable("data/truth/truth_12case_3out.txt", truth12case3out);
    }
 }
