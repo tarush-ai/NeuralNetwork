@@ -65,7 +65,7 @@ public class NLayer
    public int     numCases;
    public int     keepAlive;
 
-/*
+/* 
 * Network arrays: activations, weights, inputs.
 */
    public double[][]  a;
