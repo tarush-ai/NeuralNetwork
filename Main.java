@@ -1,7 +1,7 @@
 /*
 * Author: Tarush Gupta
-* Date: April 21, 2026
-* Description: Main driver class for the ABCD neural network.
+* Date: April 26, 2026
+* Description: Main driver class for the N-layer neural network.
 *              Reads the configuration file name from the command line, or uses
 *              the default if none is supplied. Allocates, populates, trains or
 *              runs the network, and optionally saves weights.
@@ -14,7 +14,7 @@ public class Main
    static final String DEFAULT_CONFIG_FILE = "config.json";
 
 /*
-* Entry point for the ABCD neural network. Reads config from file, allocates,
+* Entry point for the N-layer neural network. Reads config from file, allocates,
 * populates, trains or runs the network, and optionally saves weights.
 */
    public static void main(String[] args) throws Exception
@@ -30,7 +30,7 @@ public class Main
          configFile = args[0];
       }
 
-      ABCD network = new ABCD();
+      NLayer network = new NLayer();
 
       network.setConfig(configFile);
       network.echoConfig();

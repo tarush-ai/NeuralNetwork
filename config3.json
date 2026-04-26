@@ -1,28 +1,24 @@
 {
-   "inputLayer": 2,
-   "hiddenLayer1": 100,
-   "hiddenLayer2": 5,
-   "outputLayer": 3,
+   "_note": "3-layer 2-5-10-3: A-B-C-D test, converges ~15k. Saves weights for config4 run-only test.",
+   "layers": "2,5,10,3",
 
    "numCases": 4,
    "inputFile": "data/inputs/inputs_2in_4case.bin",
-   "truthTableFile": "",
+   "truthTableFile": "data/truth/truth_andorxor_4case_3out.txt",
 
-   "isTraining": false,
-   "useRandomWeights": false,
-   "_weightRange": "random init draws from [low, high]; ignored if useRandomWeights is false",
-   "low": -1.5,
+   "isTraining": true,
+   "useRandomWeights": true,
+   "low": 0.1,
    "high": 1.5,
    "lambda": 0.3,
    "maxIterations": 100000,
    "errorThreshold": 2e-4,
+   "keepAlive": 0,
 
    "shouldRun": true,
-
    "showInputTable": true,
-   "showTruthTable": false,
+   "showTruthTable": true,
 
-   "_loadNote": "set loadFile to non-empty and useRandomWeights to false to run from saved weights",
-   "loadFile":  "data/weights/save.bin",
-   "saveFile":  ""
+   "loadFile": "",
+   "saveFile": "data/weights/nlayer_2-5-10-3.bin"
 }
