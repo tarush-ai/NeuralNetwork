@@ -1,32 +1,44 @@
 /*
 * Author: Tarush Gupta
-* Date: March 12, 2026
-* Description: Main driver class for the ABCbp Neural Net.
-*              Execution flow driven entirely by config.json at runtime.
-*              Timing is measured outside train/run and stored for reporting.
+* Date: April 26, 2026
+* Description: Main driver class for the N-layer neural network.
+*              Reads the configuration file name from the command line, or uses
+*              the default if none is supplied. Allocates, populates, trains or
+*              runs the network, and optionally saves weights.
 */
 public class Main
 {
 /*
-* Entry point for the ABCbp neural network. Reads config from file, allocates,
+* Default configuration file used when no command-line argument is supplied.
+*/
+   static final String DEFAULT_CONFIG_FILE = "config.json";
+
+/*
+* Entry point for the N-layer neural network. Reads config from file, allocates,
 * populates, trains or runs the network, and optionally saves weights.
 */
    public static void main(String[] args) throws Exception
    {
-      String configFile = "config.json";
+      String configFile;
 
-      ABCbp network = new ABCbp();
+      if (args.length == 0 || args[0].length() == 0)
+      {
+         configFile = DEFAULT_CONFIG_FILE;
+      }
+      else
+      {
+         configFile = args[0];
+      }
+
+      NLayer network = new NLayer();
 
       network.setConfig(configFile);
-
       network.echoConfig();
-
       network.allocateMemory();
-
       network.populateArrays();
 
 /*
-* Train if the network is training.
+* Train if the network is in training mode.
 */
       if (network.isTraining)
       {
@@ -37,7 +49,7 @@ public class Main
       } // if (network.isTraining)
 
 /*
-* Run if the network is running.
+* Run if the network is in running mode.
 */
       if (network.shouldRun)
       {
@@ -48,7 +60,7 @@ public class Main
       } // if (network.shouldRun)
 
 /*
-* Save weights to binary file if configured.
+* Save weights to binary file if a save path is configured.
 */
       if (network.saveFile != null && network.saveFile.length() > 0)
       {

@@ -1,47 +1,24 @@
 {
-   "network":
-   {
-      "inputLayer": 2,
-      "hiddenLayer": 5,
-      "outputLayer": 3
-   },
+   "_note": "2-layer 2-20-3: quick sanity check, converges ~20k",
+   "layers": "2,20,3",
 
-   "data":
-   {
-      "numCases": 4,
-      "inputFile": "data/inputs/inputs_2in_4case.bin",
-      "truthTableFile": "data/truth/truth_andorxor_4case_3out.txt"
-   },
+   "numCases": 4,
+   "inputFile": "data/inputs/inputs_2in_4case.bin",
+   "truthTableFile": "data/truth/truth_andorxor_4case_3out.txt",
 
-   "training":
-   {
-      "isTraining": true,
-      "useRandomWeights": true,
-      "_weightRange": "random init draws from [low, high]; ignored if useRandomWeights is false",
-      "low": 0.1,
-      "high": 1.5,
-      "lambda": 0.3,
-      "maxIterations": 40000,
-      "errorThreshold": 2e-4
-   },
+   "isTraining": true,
+   "useRandomWeights": true,
+   "low": 0.1,
+   "high": 1.5,
+   "lambda": 0.3,
+   "maxIterations": 100000,
+   "errorThreshold": 2e-4,
+   "keepAlive": 0,
 
-   "execution":
-   {
-      "shouldRun": true,
-      "activationFunction": "sigmoid",
-      "_activationOptions": "sigmoid | tanh | linear"
-   },
+   "shouldRun": true,
+   "showInputTable": true,
+   "showTruthTable": true,
 
-   "display":
-   {
-      "showInputTable": true,
-      "showTruthTable": true
-   },
-
-   "files":
-   {
-      "_loadNote": "set loadFile to non-empty and useRandomWeights to false to run from saved weights",
-      "loadFile":  "",
-      "saveFile":  "data/weights/save.bin"
-   }
+   "loadFile": "",
+   "saveFile": "data/weights/nlayer_2-20-3.bin"
 }
