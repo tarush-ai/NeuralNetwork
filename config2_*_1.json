@@ -1,6 +1,6 @@
 {
    "_note": "2-layer 2-1-1: expected failure. Should output 0, 0.5, 0.5, 0.5 (or all 0.5).",
-   "layers": "2,1,1",
+   "layers": "2,20,1",
 
    "numCases": 4,
    "inputFile": "data/inputs/inputs_2in_4case.bin",

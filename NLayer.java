@@ -1,6 +1,6 @@
 /*
 * Author: Tarush Gupta
-* Date: April 26, 2026
+* Date: April 29, 2026
 * Description: N-activation-layer neural network with backpropagation.
 *              Generalizes to any number of layers with any number of nodes per layer.
 *              Layer sizes, training parameters, and file paths are all selected at
@@ -9,6 +9,8 @@
 *              weight load/save, and training or running modes.
 *
 * Table of Contents:
+*    public double activation(double x)
+*    public double activationDerivative(double x)
 *    public void setConfig(String configFile)
 *    private String getJsonValue(String json, String key)
 *    public void echoConfig()
@@ -22,8 +24,6 @@
 *    public void useLoadedWeights()
 *    public void saveWeights()
 *    public double randomize(double low, double high)
-*    public double activation(double x)
-*    public double activationDerivative(double x)
 *    public double sigmoid(double x)
 *    public double sigmoidDerivative(double x)
 *    public double tanh(double x)
@@ -47,45 +47,48 @@ import java.io.FileReader;
 
 public class NLayer
 {
+   static final int HIDDEN_FIRST  = 1;
+   static final int HIDDEN_SECOND = 2;
+
 /*
-* Network geometry: number of activation layers and size of each.
+* Network configuration
 */
-   public int    numLayers;
-   public int[]  layerSizes;
+   public int numLayers;
+   public int[] layerSizes;
 
 /*
 * Training hyperparameters.
 */
-   public double  lambda;
-   public double  low;
-   public double  high;
-   public int     maxIterations;
-   public double  errorThreshold;
+   public double lambda;
+   public double low;
+   public double high;
+   public int maxIterations;
+   public double errorThreshold;
    public boolean useRandomWeights;
-   public int     numCases;
-   public int     keepAlive;
+   public int numCases;
+   public int keepAlive;
 
-/* 
-* Network arrays: activations, weights, inputs.
+/*
+* Network arrays.
 */
    public double[][]  a;
    public double[][][] w;
-   public double[][]  inputs;
+   public double[][] inputs;
 
 /*
-* Run results.
+* Run results
 */
    public double[][] results;
 
 /*
-* Training-only arrays: targets, pre-activations, error signals.
+* Training-only arrays.
 */
    public double[][] targets;
    public double[][] theta;
    public double[][] psi;
 
 /*
-* Timing and training outcome.
+* Training results
 */
    public int  trainIterations;
    public double trainError;
@@ -93,21 +96,21 @@ public class NLayer
    public long runTimeMs;
 
 /*
-* Runtime flags and file paths.
+* Config file and runtime configuration
 */
    public boolean isTraining;
    public boolean shouldRun;
    public boolean showInputTable;
    public boolean showTruthTable;
-   public String  loadFile;
-   public String  saveFile;
-   public String  inputFile;
-   public String  truthTableFile;
-   public String  configFile;
+   public String loadFile;
+   public String saveFile;
+   public String inputFile;
+   public String truthTableFile;
+   public String configFile;
 
 /*
-* Activation function. Change this line (and activationDerivative below) to switch:
-* sigmoid(x), tanh(x), or linear(x).
+* Threshold function. Change this line (and activationDerivative below)
+* to switch activation functions: sigmoid(x), tanh(x), or linear(x).
 */
    public double activation(double x)
    {
@@ -115,8 +118,8 @@ public class NLayer
    } // activation(double x)
 
 /*
-* Activation function derivative. Must match the choice in activation() above:
-* sigmoidDerivative(x), tanhDerivative(x), or linearDerivative(x).
+* Threshold function derivative. Change this line to match the choice in
+* activation above: sigmoidDerivative(x), tanhDerivative(x), or linearDerivative(x).
 */
    public double activationDerivative(double x)
    {
@@ -124,7 +127,7 @@ public class NLayer
    } // activationDerivative(double x)
 
 /*
-* End of user configuration section.
+* End of the user configuration.
 */
 
 /*
@@ -135,7 +138,7 @@ public class NLayer
    {
       this.configFile = configFile;
 
-      StringBuilder sb     = new StringBuilder();
+      StringBuilder sb = new StringBuilder();
       BufferedReader reader = new BufferedReader(new FileReader(configFile));
       String line;
       while ((line = reader.readLine()) != null)
@@ -146,9 +149,9 @@ public class NLayer
       String json = sb.toString();
 
       String   layersStr = getJsonValue(json, "layers");
-      String[] parts     = layersStr.split(",");
-      numLayers          = parts.length;
-      layerSizes         = new int[numLayers];
+      String[] parts = layersStr.split(",");
+      numLayers = parts.length;
+      layerSizes = new int[numLayers];
 
       for (int i = 0; i < numLayers; ++i)
       {
@@ -156,43 +159,42 @@ public class NLayer
       }
 
       String keepAliveStr  = getJsonValue(json, "keepAlive");
-      numCases             = Integer.parseInt(getJsonValue(json, "numCases"));
-      inputFile            = getJsonValue(json, "inputFile");
-      truthTableFile       = getJsonValue(json, "truthTableFile");
-      isTraining           = Boolean.parseBoolean(getJsonValue(json, "isTraining"));
-      useRandomWeights     = Boolean.parseBoolean(getJsonValue(json, "useRandomWeights"));
-      low                  = Double.parseDouble(getJsonValue(json, "low"));
-      high                 = Double.parseDouble(getJsonValue(json, "high"));
-      lambda               = Double.parseDouble(getJsonValue(json, "lambda"));
-      maxIterations        = Integer.parseInt(getJsonValue(json, "maxIterations"));
-      errorThreshold       = Double.parseDouble(getJsonValue(json, "errorThreshold"));
-      keepAlive            = keepAliveStr.isEmpty() ? 0 : Integer.parseInt(keepAliveStr);
-      shouldRun            = Boolean.parseBoolean(getJsonValue(json, "shouldRun"));
-      showInputTable       = Boolean.parseBoolean(getJsonValue(json, "showInputTable"));
-      showTruthTable       = Boolean.parseBoolean(getJsonValue(json, "showTruthTable"));
-      loadFile             = getJsonValue(json, "loadFile");
-      saveFile             = getJsonValue(json, "saveFile");
+      numCases = Integer.parseInt(getJsonValue(json, "numCases"));
+      inputFile = getJsonValue(json, "inputFile");
+      truthTableFile = getJsonValue(json, "truthTableFile");
+      isTraining = Boolean.parseBoolean(getJsonValue(json, "isTraining"));
+      useRandomWeights = Boolean.parseBoolean(getJsonValue(json, "useRandomWeights"));
+      low = Double.parseDouble(getJsonValue(json, "low"));
+      high = Double.parseDouble(getJsonValue(json, "high"));
+      lambda = Double.parseDouble(getJsonValue(json, "lambda"));
+      maxIterations = Integer.parseInt(getJsonValue(json, "maxIterations"));
+      errorThreshold = Double.parseDouble(getJsonValue(json, "errorThreshold"));
+      keepAlive = keepAliveStr.isEmpty() ? 0 : Integer.parseInt(keepAliveStr);
+      shouldRun = Boolean.parseBoolean(getJsonValue(json, "shouldRun"));
+      showInputTable = Boolean.parseBoolean(getJsonValue(json, "showInputTable"));
+      showTruthTable = Boolean.parseBoolean(getJsonValue(json, "showTruthTable"));
+      loadFile = getJsonValue(json, "loadFile");
+      saveFile = getJsonValue(json, "saveFile");
    } // setConfig(String configFile)
 
 /*
-* Extracts the value string for the given key from a flat JSON string.
-* For quoted values, returns content between the surrounding quotes.
-* For unquoted values, returns trimmed text up to the next comma or closing brace.
-* Returns empty string if the key is not found.
+* Extracts the value for key from a flat JSON string. Returns the content
+* of a quoted string, or trimmed text to the next ',' or '}' for unquoted.
+* Returns empty string if key not found.
 */
    private String getJsonValue(String json, String key)
    {
       String result = "";
-      int    keyIdx = json.indexOf("\"" + key + "\"");
+      int keyIdx = json.indexOf("\"" + key + "\"");
 
       if (keyIdx != -1)
       {
-         int    colonIdx = json.indexOf(":", keyIdx);
-         String rest     = json.substring(colonIdx + 1).trim();
+         int colonIdx = json.indexOf(":", keyIdx);
+         String rest = json.substring(colonIdx + 1).trim();
 
          if (rest.charAt(0) == '"')
          {
-            int openQuote  = json.indexOf('"', colonIdx + 1);
+            int openQuote = json.indexOf('"', colonIdx + 1);
             int closeQuote = json.indexOf('"', openQuote + 1);
             result = json.substring(openQuote + 1, closeQuote);
          }
@@ -200,7 +202,7 @@ public class NLayer
          {
             int commaIdx = json.indexOf(",", colonIdx);
             int braceIdx = json.indexOf("}", colonIdx);
-            int endIdx   = (commaIdx != -1 && commaIdx < braceIdx) ? commaIdx : braceIdx;
+            int endIdx = (commaIdx != -1 && commaIdx < braceIdx) ? commaIdx : braceIdx;
             result = json.substring(colonIdx + 1, endIdx).trim();
          }
       } // if (keyIdx != -1)
@@ -209,7 +211,7 @@ public class NLayer
    } // getJsonValue(String json, String key)
 
 /*
-* Prints current network configuration including all layer sizes, file names,
+* Prints current network config including all layer sizes, file names,
 * and training parameters when applicable.
 */
    public void echoConfig()
@@ -257,9 +259,8 @@ public class NLayer
    } // echoConfig()
 
 /*
-* Allocates all network arrays. Training-only arrays (theta, psi, targets) are
-* allocated only when isTraining is true. results is allocated only when needed
-* for a run pass.
+* Allocates memory for all network arrays. Training-only arrays (theta, psi, targets)
+* are only allocated when the network is in training mode.
 */
    public void allocateMemory()
    {
@@ -290,13 +291,13 @@ public class NLayer
          targets = new double[numCases][layerSizes[outputLayer]];
 
          theta = new double[numLayers][];
-         for (n = 1; n <= numLayers - 2; ++n)
+         for (n = HIDDEN_FIRST; n <= numLayers - 2; ++n)
          {
             theta[n] = new double[layerSizes[n]];
          }
 
          psi = new double[numLayers][];
-         for (n = 2; n < numLayers; ++n)
+         for (n = HIDDEN_SECOND; n < numLayers; ++n)
          {
             psi[n] = new double[layerSizes[n]];
          }
@@ -304,7 +305,7 @@ public class NLayer
    } // allocateMemory()
 
 /*
-* Reads binary input activations from filename into the inputs array.
+* Reads binary input activations from the given file into the inputs array.
 */
    private void loadInputs(String filename) throws Exception
    {
@@ -322,7 +323,7 @@ public class NLayer
    } // loadInputs(String filename)
 
 /*
-* Reads a whitespace-delimited truth table from filename into the targets array.
+* Reads a truth table from the given file into the targets array.
 */
    private void loadTruthTable(String filename) throws Exception
    {
@@ -342,8 +343,8 @@ public class NLayer
    } // loadTruthTable(String filename)
 
 /*
-* Loads inputs and (if training) targets, then populates weights from random
-* values or a saved binary file, as configured.
+* Loads inputs and (if training) targets, then initializes weights from
+* random values or a saved binary file as configured.
 */
    public void populateArrays() throws Exception
    {
@@ -365,7 +366,7 @@ public class NLayer
    } // populateArrays()
 
 /*
-* Prints the raw input table for all test cases.
+* Prints the input table by iterating through the inputs.
 */
    public void printInputTable()
    {
@@ -381,7 +382,8 @@ public class NLayer
    } // printInputTable()
 
 /*
-* Prints inputs and targets side by side for all test cases.
+* Prints the truth table by iterating through the inputs and targets,
+* showing all output columns for each test case.
 */
    public void printTruthTable()
    {
@@ -404,7 +406,7 @@ public class NLayer
    } // printTruthTable()
 
 /*
-* Fills all weight matrices with random values drawn from [low, high].
+* Initializes all weights randomly using the randomize function.
 */
    public void randomizeWeights()
    {
@@ -425,20 +427,19 @@ public class NLayer
    } // randomizeWeights()
 
 /*
-* Loads weights from loadFile. Reads numLayers and all layer sizes from the file
-* and verifies they match the current network before loading weight values.
+* Uses the weights from the loaded file.
 */
    public void useLoadedWeights()
    {
       try
       {
-         DataInputStream in          = new DataInputStream(new FileInputStream(loadFile));
-         int             fileNumLayers = in.readInt();
-         int[]           fileSizes   = new int[fileNumLayers];
-         boolean         match;
-         int             n;
-         int             j;
-         int             k;
+         DataInputStream in = new DataInputStream(new FileInputStream(loadFile));
+         int fileNumLayers = in.readInt();
+         int[] fileSizes = new int[fileNumLayers];
+         boolean match;
+         int n;
+         int j;
+         int k;
 
          for (n = 0; n < fileNumLayers; ++n)
          {
@@ -478,7 +479,7 @@ public class NLayer
    } // useLoadedWeights()
 
 /*
-* Saves weights to saveFile. Writes numLayers, all layer sizes, then all weights.
+* Saves the weights to the relevant file.
 */
    public void saveWeights()
    {
@@ -515,7 +516,8 @@ public class NLayer
    } // saveWeights()
 
 /*
-* Returns a random double uniformly drawn from [low, high].
+* Returns a random double between low and high. It uses
+* Math.random().
 */
    public double randomize(double low, double high)
    {
@@ -523,7 +525,7 @@ public class NLayer
    } // randomize(double low, double high)
 
 /*
-* Sigmoid activation: f(x) = 1 / (1 + e^-x).
+* Sigmoid activation: f(x) = 1 / (1 + e^-x). Uses Math.exp().
 */
    public double sigmoid(double x)
    {
@@ -531,7 +533,7 @@ public class NLayer
    } // sigmoid(double x)
 
 /*
-* Sigmoid derivative: f'(x) = f(x) * (1 - f(x)).
+* Sigmoid activation derivative: f'(x) = f(x) * (1 - f(x)).
 */
    public double sigmoidDerivative(double x)
    {
@@ -540,8 +542,8 @@ public class NLayer
    } // sigmoidDerivative(double x)
 
 /*
-* Hyperbolic tangent using ε(x) = (x < 0) ? 1 : -1.
-* exp(ε * 2x) is computed once and reused in numerator and denominator.
+* Hyperbolic tangent activation using eps(x) = (x < 0) ? 1 : -1. exp(eps * 2x) is computed
+* once and reused in both the numerator and denominator.
 */
    public double tanh(double x)
    {
@@ -551,7 +553,7 @@ public class NLayer
    } // tanh(double x)
 
 /*
-* Hyperbolic tangent derivative: f'(x) = 1 - f(x)^2.
+* Hyperbolic tangent derivative: f'(x) = 1 - f^2(x).
 */
    public double tanhDerivative(double x)
    {
@@ -560,7 +562,7 @@ public class NLayer
    } // tanhDerivative(double x)
 
 /*
-* Linear activation: f(x) = x.
+* Linear activation: f(x) = x
 */
    public double linear(double x)
    {
@@ -576,22 +578,20 @@ public class NLayer
    } // linearDerivative(double x)
 
 /*
-* Forward pass for training. Blue box computes theta and a for hidden layers
-* (α: 1 to numLayers-2). Green box computes a, ψ, and accumulates E for the
-* output layer. Returns twice the total squared error for the given case.
+* Forward pass for training. Returns twice the total squared error for the given case.
 */
    public double runTrainCase(int caseIndex)
    {
-      int    n;
-      int    j;
-      int    k;
-      int    outputLayer = numLayers - 1;
+      int n;
+      int j;
+      int k;
+      int outputLayer = numLayers - 1;
       double twiceError  = 0.0;
 
 /*
-* Blue box: α from HiddenFirst to HiddenLast.
+* Compute theta and activations for all hidden layers.
 */
-      for (n = 1; n <= numLayers - 2; ++n)
+      for (n = HIDDEN_FIRST; n <= numLayers - 2; ++n)
       {
          for (j = 0; j < layerSizes[n]; ++j)
          {
@@ -602,10 +602,10 @@ public class NLayer
             }
             a[n][j] = activation(theta[n][j]);
          }
-      } // for (n = 1; n <= numLayers - 2; ++n)
+      } // for (n = HIDDEN_FIRST; n <= numLayers - 2; ++n)
 
 /*
-* Green box: α = output layer. Compute a, ψ, and accumulate E.
+* Compute theta, activation, error signal, and psi for the output layer.
 */
       n = outputLayer;
       for (j = 0; j < layerSizes[n]; ++j)
@@ -615,18 +615,17 @@ public class NLayer
          {
             thetaJ += a[n - 1][k] * w[n - 1][k][j];
          }
-         a[n][j]       = activation(thetaJ);
+         a[n][j] = activation(thetaJ);
          double omegaJ = targets[caseIndex][j] - a[n][j];
-         psi[n][j]     = omegaJ * activationDerivative(thetaJ);
-         twiceError   += omegaJ * omegaJ;
+         psi[n][j] = omegaJ * activationDerivative(thetaJ);
+         twiceError += omegaJ * omegaJ;
       } // for (j = 0; j < layerSizes[n]; ++j)
 
       return twiceError;
    } // runTrainCase(int caseIndex)
 
 /*
-* Forward pass for inference only (no theta or psi storage).
-* Red box: all layers α from 1 to numLayers-1.
+* Runs the network forward on pre-populated input activations.
 */
    public void runTestCase()
    {
@@ -634,7 +633,7 @@ public class NLayer
       int j;
       int k;
 
-      for (n = 1; n < numLayers; ++n)
+      for (n = HIDDEN_FIRST; n < numLayers; ++n)
       {
          for (j = 0; j < layerSizes[n]; ++j)
          {
@@ -645,32 +644,22 @@ public class NLayer
             }
             a[n][j] = activation(thetaAcc);
          }
-      } // for (n = 1; n < numLayers; ++n)
+      } // for (n = HIDDEN_FIRST; n < numLayers; ++n)
    } // runTestCase()
 
 /*
-* Steepest-descent training across all cases until error threshold or max
-* iterations is reached.
-*
-* Purple box (α: HiddenLast downto HiddenSecond):
-*   n indexes the SOURCE activation layer. w[n] connects layer n to n+1.
-*   Computes Ω(n,j) and Ψ(n,j) using pre-update weights, then updates w[n].
-*
-* Orange box (α = HiddenFirst = 1):
-*   Part 1 — update w[1] using a[1] and ψ(2).
-*   Part 2 — compute Ψ(1) using post-update w[1] (O(λ²) perturbation, intentional
-*             per design: collapses two m-loops into one).
-*   Part 3 — update w[0] using a[0] and Ψ(1).
+* Trains the network using steepest descent across all training cases.
+* Stores final iteration count and error in trainIterations and trainError.
 */
    public void train()
    {
-      int    iteration = 0;
+      int iteration = 0;
       double avgError  = Double.MAX_VALUE;
-      int    caseIndex;
-      int    n;
-      int    j;
-      int    k;
-      int    m;
+      int caseIndex;
+      int n;
+      int j;
+      int k;
+      int m;
       double totalError;
 
       while (iteration < maxIterations && avgError >= errorThreshold)
@@ -683,30 +672,26 @@ public class NLayer
             totalError += runTrainCase(caseIndex);
 
 /*
-* Purple box: α from HiddenLast downto HiddenSecond.
-* n is the source activation layer index for weight layer w[n].
+* Back-propagate psi from HiddenLast down to HiddenSecond, updating weights.
 */
-            for (n = numLayers - 2; n >= 2; --n)
+            for (n = numLayers - 2; n >= HIDDEN_SECOND; --n)
             {
                for (j = 0; j < layerSizes[n]; ++j)
                {
                   double omega = 0.0;
                   for (k = 0; k < layerSizes[n + 1]; ++k)
                   {
-                     omega      += psi[n + 1][k] * w[n][j][k];
+                     omega += psi[n + 1][k] * w[n][j][k];
                      w[n][j][k] += lambda * a[n][j] * psi[n + 1][k];
                   }
                   psi[n][j] = omega * activationDerivative(theta[n][j]);
                }
-            } // for (n = numLayers - 2; n >= 2; --n)
+            } // for (n = numLayers - 2; n >= HIDDEN_SECOND; --n)
 
 /*
-* Orange box: α = HiddenFirst = 1.
-* Part 1: update w[1][j][k].
-* Part 2: compute Ψ(1,j) using post-update w[1].
-* Part 3: update w[0][m][j] using Ψ(1,j).
+* Back-propagate through HiddenFirst: update w[n], compute psi[n], update w[n-1].
 */
-            n = 1;
+            n = HIDDEN_FIRST;
             for (j = 0; j < layerSizes[n]; ++j)
             {
                for (k = 0; k < layerSizes[n + 1]; ++k)
@@ -742,7 +727,7 @@ public class NLayer
    } // train()
 
 /*
-* Reports training exit reason, final iteration count, average error, and elapsed time.
+* Reports training exit info: reason, iterations, final error, and time.
 */
    public void reportTrainingResults()
    {
@@ -764,7 +749,7 @@ public class NLayer
    } // reportTrainingResults()
 
 /*
-* Sets input activations a[0][m] from inputs[caseIndex].
+* Sets input activations a[0][m] from the given case index.
 */
    public void populateInput(int caseIndex)
    {
@@ -775,7 +760,8 @@ public class NLayer
    } // populateInput(int caseIndex)
 
 /*
-* Runs all test cases and stores output activations in results[][].
+* Loops over all test cases, setting inputs and running the network.
+* Stores each output activation in results[caseIndex][i].
 */
    public void runTestCases()
    {
@@ -796,7 +782,8 @@ public class NLayer
    } // runTestCases()
 
 /*
-* Prints inputs, expected outputs (when training), and actual outputs for every case.
+* Reports run results with expected vs actual outputs for all output nodes.
+* Output values are printed to four decimal places.
 */
    public void reportRunResults()
    {

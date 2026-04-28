@@ -1,6 +1,6 @@
 {
-   "_note": "3-layer 2-5-10-3: A-B-C-D test, converges ~15k. Saves weights for config4 run-only test.",
-   "layers": "2,5,10,3",
+   "_note": "2-layer 2-20-3: quick sanity check, converges ~20k",
+   "layers": "2,1,3",
 
    "numCases": 4,
    "inputFile": "data/inputs/inputs_2in_4case.bin",
@@ -20,5 +20,5 @@
    "showTruthTable": true,
 
    "loadFile": "",
-   "saveFile": "data/weights/nlayer_2-5-10-3.bin"
+   "saveFile": "data/weights/nlayer_2-20-3.bin"
 }
