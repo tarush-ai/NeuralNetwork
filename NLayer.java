@@ -9,34 +9,34 @@
 *              weight load/save, and training or running modes.
 *
 * Table of Contents:
-*    public double activation(double x)
-*    public double activationDerivative(double x)
-*    public void setConfig(String configFile)
-*    private String getJsonValue(String json, String key)
-*    public void echoConfig()
-*    public void allocateMemory()
-*    private void loadInputs(String filename)
-*    private void loadTruthTable(String filename)
-*    public void populateArrays()
-*    public void printInputTable()
-*    public void printTruthTable()
-*    public void randomizeWeights()
-*    public void useLoadedWeights()
-*    public void saveWeights()
-*    public double randomize(double low, double high)
-*    public double sigmoid(double x)
-*    public double sigmoidDerivative(double x)
-*    public double tanh(double x)
-*    public double tanhDerivative(double x)
-*    public double linear(double x)
-*    public double linearDerivative(double x)
-*    public double runTrainCase(int caseIndex)
-*    public void runTestCase()
-*    public void train()
-*    public void reportTrainingResults()
-*    public void populateInput(int caseIndex)
-*    public void runTestCases()
-*    public void reportRunResults()
+* public double activation(double x)
+* public double activationDerivative(double x)
+* public void setConfig(String configFile)
+* private String getJsonValue(String json, String key)
+* public void echoConfig()
+* public void allocateMemory()
+* private void loadInputs(String filename)
+* private void loadTruthTable(String filename)
+* public void populateArrays()
+* public void printInputTable()
+* public void printTruthTable()
+* public void randomizeWeights()
+* public void useLoadedWeights()
+* public void saveWeights()
+* public double randomize(double low, double high)
+* public double sigmoid(double x)
+* public double sigmoidDerivative(double x)
+* public double tanh(double x)
+* public double tanhDerivative(double x)
+* public double linear(double x)
+* public double linearDerivative(double x)
+* public double runTrainCase(int caseIndex)
+* public void runTestCase()
+* public void train()
+* public void reportTrainingResults()
+* public void populateInput(int caseIndex)
+* public void runTestCases()
+* public void reportRunResults()
 */
 import java.io.BufferedReader;
 import java.io.DataInputStream;
@@ -47,6 +47,7 @@ import java.io.FileReader;
 
 public class NLayer
 {
+   static final int INPUT_LAYER   = 0;
    static final int HIDDEN_FIRST  = 1;
    static final int HIDDEN_SECOND = 2;
 
@@ -148,7 +149,7 @@ public class NLayer
       reader.close();
       String json = sb.toString();
 
-      String   layersStr = getJsonValue(json, "layers");
+      String layersStr = getJsonValue(json, "layers");
       String[] parts = layersStr.split(",");
       numLayers = parts.length;
       layerSizes = new int[numLayers];
@@ -158,7 +159,6 @@ public class NLayer
          layerSizes[i] = Integer.parseInt(parts[i].trim());
       }
 
-      String keepAliveStr  = getJsonValue(json, "keepAlive");
       numCases = Integer.parseInt(getJsonValue(json, "numCases"));
       inputFile = getJsonValue(json, "inputFile");
       truthTableFile = getJsonValue(json, "truthTableFile");
@@ -169,7 +169,7 @@ public class NLayer
       lambda = Double.parseDouble(getJsonValue(json, "lambda"));
       maxIterations = Integer.parseInt(getJsonValue(json, "maxIterations"));
       errorThreshold = Double.parseDouble(getJsonValue(json, "errorThreshold"));
-      keepAlive = keepAliveStr.isEmpty() ? 0 : Integer.parseInt(keepAliveStr);
+      keepAlive = Integer.parseInt(getJsonValue(json, "keepAlive"));
       shouldRun = Boolean.parseBoolean(getJsonValue(json, "shouldRun"));
       showInputTable = Boolean.parseBoolean(getJsonValue(json, "showInputTable"));
       showTruthTable = Boolean.parseBoolean(getJsonValue(json, "showTruthTable"));
@@ -178,14 +178,45 @@ public class NLayer
    } // setConfig(String configFile)
 
 /*
-* Extracts the value for key from a flat JSON string. Returns the content
-* of a quoted string, or trimmed text to the next ',' or '}' for unquoted.
-* Returns empty string if key not found.
+* Extracts the raw value string for the given key from a JSON string.
+* Matches "key" only when followed by ':' so embedded copies inside string
+* values are skipped. Returns empty string if the key is not found.
 */
    private String getJsonValue(String json, String key)
    {
       String result = "";
-      int keyIdx = json.indexOf("\"" + key + "\"");
+      String pattern = "\"" + key + "\"";
+      int patternLen = pattern.length();
+      int len = json.length();
+      int keyIdx = -1;
+      int searchFrom = 0;
+
+      while (searchFrom != -1 && keyIdx == -1)
+      {
+         int idx = json.indexOf(pattern, searchFrom);
+
+         if (idx == -1)
+         {
+            searchFrom = -1;
+         }
+         else
+         {
+            int p = idx + patternLen;
+            while (p < len && Character.isWhitespace(json.charAt(p)))
+            {
+               ++p;
+            }
+
+            if (p < len && json.charAt(p) == ':')
+            {
+               keyIdx = idx;
+            }
+            else
+            {
+               searchFrom = idx + 1;
+            }
+         }
+      } // while (searchFrom != -1 && keyIdx == -1)
 
       if (keyIdx != -1)
       {
@@ -211,8 +242,7 @@ public class NLayer
    } // getJsonValue(String json, String key)
 
 /*
-* Prints current network config including all layer sizes, file names,
-* and training parameters when applicable.
+* Prints current network config including layer sizes, file names, and training parameters when applicable.
 */
    public void echoConfig()
    {
@@ -266,6 +296,7 @@ public class NLayer
    {
       int n;
       int outputLayer = numLayers - 1;
+      int hiddenLast = numLayers - 2;
 
       a = new double[numLayers][];
       for (n = 0; n < numLayers; ++n)
@@ -279,7 +310,7 @@ public class NLayer
          w[n] = new double[layerSizes[n]][layerSizes[n + 1]];
       }
 
-      inputs = new double[numCases][layerSizes[0]];
+      inputs = new double[numCases][layerSizes[INPUT_LAYER]];
 
       if (!isTraining || shouldRun)
       {
@@ -291,7 +322,7 @@ public class NLayer
          targets = new double[numCases][layerSizes[outputLayer]];
 
          theta = new double[numLayers][];
-         for (n = HIDDEN_FIRST; n <= numLayers - 2; ++n)
+         for (n = HIDDEN_FIRST; n <= hiddenLast; ++n)
          {
             theta[n] = new double[layerSizes[n]];
          }
@@ -313,7 +344,7 @@ public class NLayer
 
       for (int c = 0; c < numCases; ++c)
       {
-         for (int m = 0; m < layerSizes[0]; ++m)
+         for (int m = 0; m < layerSizes[INPUT_LAYER]; ++m)
          {
             inputs[c][m] = in.readDouble();
          }
@@ -328,7 +359,7 @@ public class NLayer
    private void loadTruthTable(String filename) throws Exception
    {
       BufferedReader br = new BufferedReader(new FileReader(filename));
-      int outputLayer   = numLayers - 1;
+      int outputLayer = numLayers - 1;
 
       for (int c = 0; c < numCases; ++c)
       {
@@ -373,7 +404,7 @@ public class NLayer
       System.out.println("\nInput Table:");
       for (int c = 0; c < numCases; ++c)
       {
-         for (int m = 0; m < layerSizes[0]; ++m)
+         for (int m = 0; m < layerSizes[INPUT_LAYER]; ++m)
          {
             System.out.print(inputs[c][m] + "\t");
          }
@@ -392,7 +423,7 @@ public class NLayer
       System.out.println("\nTruth Table:");
       for (int c = 0; c < numCases; ++c)
       {
-         for (int m = 0; m < layerSizes[0]; ++m)
+         for (int m = 0; m < layerSizes[INPUT_LAYER]; ++m)
          {
             System.out.print(inputs[c][m] + "\t");
          }
@@ -447,7 +478,7 @@ public class NLayer
          }
 
          match = (fileNumLayers == numLayers);
-         for (n = 0; n < numLayers && match; ++n)
+         for (n = 0; n < numLayers; ++n)
          {
             if (fileSizes[n] != layerSizes[n]) match = false;
          }
@@ -586,12 +617,13 @@ public class NLayer
       int j;
       int k;
       int outputLayer = numLayers - 1;
+      int hiddenLast  = numLayers - 2;
       double twiceError  = 0.0;
 
 /*
-* Compute theta and activations for all hidden layers.
+* Hidden layers: theta[n][j] = sum_k a[n-1][k] * w[n-1][k][j], a[n][j] = f(theta[n][j]).
 */
-      for (n = HIDDEN_FIRST; n <= numLayers - 2; ++n)
+      for (n = HIDDEN_FIRST; n <= hiddenLast; ++n)
       {
          for (j = 0; j < layerSizes[n]; ++j)
          {
@@ -602,10 +634,10 @@ public class NLayer
             }
             a[n][j] = activation(theta[n][j]);
          }
-      } // for (n = HIDDEN_FIRST; n <= numLayers - 2; ++n)
+      } // for (n = HIDDEN_FIRST; n <= hiddenLast; ++n)
 
 /*
-* Compute theta, activation, error signal, and psi for the output layer.
+* Output layer: omega = T - a, psi = omega * f'(theta), 2E += omega^2.
 */
       n = outputLayer;
       for (j = 0; j < layerSizes[n]; ++j)
@@ -660,6 +692,7 @@ public class NLayer
       int j;
       int k;
       int m;
+      int hiddenLast = numLayers - 2;
       double totalError;
 
       while (iteration < maxIterations && avgError >= errorThreshold)
@@ -672,9 +705,10 @@ public class NLayer
             totalError += runTrainCase(caseIndex);
 
 /*
-* Back-propagate psi from HiddenLast down to HiddenSecond, updating weights.
+* HiddenLast..HiddenSecond: Omega = sum_k psi[n+1][k] * w[n][j][k], psi[n][j] = Omega * f'(theta[n][j]),
+* delta_w[n][j][k] = lambda * a[n][j] * psi[n+1][k].
 */
-            for (n = numLayers - 2; n >= HIDDEN_SECOND; --n)
+            for (n = hiddenLast; n >= HIDDEN_SECOND; --n)
             {
                for (j = 0; j < layerSizes[n]; ++j)
                {
@@ -686,23 +720,20 @@ public class NLayer
                   }
                   psi[n][j] = omega * activationDerivative(theta[n][j]);
                }
-            } // for (n = numLayers - 2; n >= HIDDEN_SECOND; --n)
+            } // for (n = hiddenLast; n >= HIDDEN_SECOND; --n)
 
 /*
-* Back-propagate through HiddenFirst: update w[n], compute psi[n], update w[n-1].
+* HiddenFirst: Omega = sum_k psi[n+1][k] * w[n][j][k] (read before update), psiJ = Omega * f'(theta[n][j]),
+* delta_w[n][j][k] = lambda * a[n][j] * psi[n+1][k], delta_w[n-1][m][j] = lambda * a[n-1][m] * psiJ.
 */
             n = HIDDEN_FIRST;
             for (j = 0; j < layerSizes[n]; ++j)
             {
-               for (k = 0; k < layerSizes[n + 1]; ++k)
-               {
-                  w[n][j][k] += lambda * a[n][j] * psi[n + 1][k];
-               }
-
                double omega = 0.0;
                for (k = 0; k < layerSizes[n + 1]; ++k)
                {
                   omega += psi[n + 1][k] * w[n][j][k];
+                  w[n][j][k] += lambda * a[n][j] * psi[n + 1][k];
                }
                double psiJ = omega * activationDerivative(theta[n][j]);
 
@@ -720,10 +751,27 @@ public class NLayer
          if ((keepAlive != 0) && ((iteration % keepAlive) == 0))
             System.out.printf("Iteration %d, Error = %f\n", iteration, avgError);
 
+/*
+ * Per-iteration checkpoint dump. Useful when training images with occasional loss
+ * spikes (recover from the last good iter). Disabled for normal boolean and finger
+ * tests — re-enable by uncommenting if doing spike-prone image training again.
+ *
+ *       if (saveFile != null && saveFile.length() > 0 && (iteration % 100) == 0)
+ *       {
+ *          String origSaveFile = saveFile;
+ *          int dotIdx = saveFile.lastIndexOf('.');
+ *          String stem = (dotIdx > 0) ? saveFile.substring(0, dotIdx) : saveFile;
+ *          String ext  = (dotIdx > 0) ? saveFile.substring(dotIdx)    : "";
+ *          saveFile = stem + "_iter" + iteration + ext;
+ *          saveWeights();
+ *          saveFile = origSaveFile;
+ *       }
+ */
+
       } // while (iteration < maxIterations && avgError >= errorThreshold)
 
       trainIterations = iteration;
-      trainError      = avgError;
+      trainError = avgError;
    } // train()
 
 /*
@@ -749,13 +797,13 @@ public class NLayer
    } // reportTrainingResults()
 
 /*
-* Sets input activations a[0][m] from the given case index.
+* Sets input activations a[INPUT_LAYER][m] from the given case index.
 */
    public void populateInput(int caseIndex)
    {
-      for (int m = 0; m < layerSizes[0]; ++m)
+      for (int m = 0; m < layerSizes[INPUT_LAYER]; ++m)
       {
-         a[0][m] = inputs[caseIndex][m];
+         a[INPUT_LAYER][m] = inputs[caseIndex][m];
       }
    } // populateInput(int caseIndex)
 
@@ -791,22 +839,28 @@ public class NLayer
       int i;
       int m;
       int outputLayer = numLayers - 1;
+      boolean bareOutputs = !showInputTable && !showTruthTable;
+      String fmt = bareOutputs ? "%.4f\t" : "%.4f\t";
 
+      System.out.println();
       if (showInputTable)
       {
-         System.out.print("\nInputs\t\t");
+         System.out.print("Inputs\t\t");
       }
-      if (showTruthTable && targets != null)
+      if (showTruthTable && isTraining)
       {
          System.out.print("| Expected\t");
       }
-      System.out.println("| Actual");
+      if (!bareOutputs)
+      {
+         System.out.println("| Actual");
+      }
 
       for (caseIndex = 0; caseIndex < numCases; ++caseIndex)
       {
          if (showInputTable)
          {
-            for (m = 0; m < layerSizes[0]; ++m)
+            for (m = 0; m < layerSizes[INPUT_LAYER]; ++m)
             {
                System.out.print(inputs[caseIndex][m] + "\t");
             }
@@ -821,10 +875,13 @@ public class NLayer
             }
          }
 
-         System.out.print("| ");
+         if (!bareOutputs)
+         {
+            System.out.print("| ");
+         }
          for (i = 0; i < layerSizes[outputLayer]; ++i)
          {
-            System.out.printf("%.4f\t", results[caseIndex][i]);
+            System.out.printf(fmt, results[caseIndex][i]);
          }
          System.out.println();
       } // for (caseIndex = 0; caseIndex < numCases; ++caseIndex)

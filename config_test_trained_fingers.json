@@ -1,0 +1,23 @@
+{
+   "layers": "80640,25,10,5",
+
+   "numCases": 25,
+   "inputFile": "data/inputs/inputs_fingers_25case.bin",
+   "truthTableFile": "data/truth/truth_fingers_25case_5out.txt",
+
+   "isTraining": false,
+   "useRandomWeights": false,
+   "low": -0.1,
+   "high": 0.1,
+   "lambda": 0.05,
+   "maxIterations": 1000,
+   "errorThreshold": 1e-5,
+   "keepAlive": 100,
+
+   "shouldRun": true,
+   "showInputTable": false,
+   "showTruthTable": false,
+
+   "loadFile": "data/weights/fingers_stage5_iter1200.bin",
+   "saveFile": ""
+}

@@ -1,4 +1,12 @@
 *.class
 .env
 data/weights/
+data/activations/
+data/checkoff_bmp_2/
+history/
+imagesbmp/
+imgs2/
+utilities/resize.java
+
+
 
